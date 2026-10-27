@@ -13,9 +13,9 @@ import { PageHeader, SectionLabel } from "@/components/shared/page-header";
 import { RevenueBars, type RevenuePoint } from "@/components/charts/revenue-bars";
 
 export default async function DashboardPage() {
-  const user = await requireAdmin();
-  const settings = await getSettings();
-  const shift = await getOpenShift(user.id);
+  const { user, store } = await requireAdmin();
+  const settings = await getSettings(store.id);
+  const shift = await getOpenShift(user.id, store.id);
   // Server component: the request clock is the correct source.
   // eslint-disable-next-line react-hooks/purity
   const now = Date.now();
@@ -35,6 +35,7 @@ export default async function DashboardPage() {
         .from(orders)
         .where(
           and(
+            eq(orders.storeId, store.id),
             eq(orders.status, "completed"),
             gte(orders.createdAt, new Date(from)),
             lt(orders.createdAt, new Date(to)),
@@ -55,7 +56,7 @@ export default async function DashboardPage() {
            coalesce(sum(total), 0) as revenue,
            count(*) as orders
     from orders
-    where status = 'completed' and created_at >= ${new Date(weekStart)}
+    where store_id = ${store.id} and status = 'completed' and created_at >= ${new Date(weekStart)}
     group by 1
     order by 1
   `);
@@ -77,6 +78,7 @@ export default async function DashboardPage() {
     })
     .from(orders)
     .innerJoin(users, eq(orders.userId, users.id))
+    .where(eq(orders.storeId, store.id))
     .orderBy(desc(orders.createdAt))
     .limit(6);
 
@@ -89,7 +91,13 @@ export default async function DashboardPage() {
       unit: products.unit,
     })
     .from(products)
-    .where(and(eq(products.active, true), sql`${products.stock} <= ${products.lowStockAt}`))
+    .where(
+      and(
+        eq(products.storeId, store.id),
+        eq(products.active, true),
+        sql`${products.stock} <= ${products.lowStockAt}`,
+      ),
+    )
     .orderBy(products.stock)
     .limit(5);
 
@@ -103,6 +111,7 @@ export default async function DashboardPage() {
     .innerJoin(orders, eq(orderItems.orderId, orders.id))
     .where(
       and(
+        eq(orders.storeId, store.id),
         eq(orders.status, "completed"),
         gte(orders.createdAt, new Date(today)),
       ),
@@ -121,7 +130,7 @@ export default async function DashboardPage() {
   return (
     <div className="mx-auto max-w-6xl space-y-8">
       <PageHeader
-        eyebrow={dateLabel}
+        eyebrow={`${store.name} · ${dateLabel}`}
         title="Ringkasan hari ini"
         description={
           shift

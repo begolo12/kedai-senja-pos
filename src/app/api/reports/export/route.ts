@@ -1,14 +1,16 @@
 import { and, asc, eq, gte, lt } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { customers, orderItems, orders, users } from "@/lib/db/schema";
-import { getCurrentUser } from "@/lib/auth";
+import { getStoreContext } from "@/lib/auth";
 import { readDateRange } from "@/lib/dates";
 import { toCsv } from "@/lib/csv";
 
 export async function GET(request: Request) {
-  const user = await getCurrentUser();
-  if (!user) return new Response("Unauthorized", { status: 401 });
-  if (user.role !== "admin") return new Response("Forbidden", { status: 403 });
+  const context = await getStoreContext();
+  if (!context) return new Response("Unauthorized", { status: 401 });
+  if (context.user.role !== "admin") return new Response("Forbidden", { status: 403 });
+  if (!context.store) return new Response("Pilih toko dulu", { status: 400 });
+  const storeId = context.store.id;
 
   const url = new URL(request.url);
   const range = readDateRange({
@@ -36,7 +38,13 @@ export async function GET(request: Request) {
     .from(orders)
     .innerJoin(users, eq(orders.userId, users.id))
     .leftJoin(customers, eq(orders.customerId, customers.id))
-    .where(and(gte(orders.createdAt, start), lt(orders.createdAt, end)))
+    .where(
+      and(
+        eq(orders.storeId, storeId),
+        gte(orders.createdAt, start),
+        lt(orders.createdAt, end),
+      ),
+    )
     .orderBy(asc(orders.createdAt));
 
   const items = await db
@@ -50,7 +58,13 @@ export async function GET(request: Request) {
     })
     .from(orderItems)
     .innerJoin(orders, eq(orderItems.orderId, orders.id))
-    .where(and(gte(orders.createdAt, start), lt(orders.createdAt, end)));
+    .where(
+      and(
+        eq(orders.storeId, storeId),
+        gte(orders.createdAt, start),
+        lt(orders.createdAt, end),
+      ),
+    );
 
   const csv = [
     toCsv(
@@ -86,7 +100,7 @@ export async function GET(request: Request) {
   return new Response(`\uFEFF${csv}`, {
     headers: {
       "content-type": "text/csv; charset=utf-8",
-      "content-disposition": `attachment; filename="laporan-${range.from}-${range.to}.csv"`,
+      "content-disposition": `attachment; filename="laporan-${context.store.code}-${range.from}-${range.to}.csv"`,
     },
   });
 }

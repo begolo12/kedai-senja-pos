@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { desc, like, or, sql } from "drizzle-orm";
+import { and, desc, eq, like, or, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { customers } from "@/lib/db/schema";
 import { requireAdmin } from "@/lib/auth";
@@ -13,15 +13,20 @@ import { CustomerDialog } from "@/components/customers/customer-dialog";
 export const metadata: Metadata = { title: "Pelanggan" };
 
 export default async function CustomersPage({ searchParams }: PageProps<"/customers">) {
-  await requireAdmin();
+  const { store } = await requireAdmin();
   const params = await searchParams;
   const q = typeof params.q === "string" ? params.q.trim() : "";
-  const settings = await getSettings();
+  const settings = await getSettings(store.id);
 
   const rows = await db
     .select()
     .from(customers)
-    .where(q ? or(like(customers.name, `%${q}%`), like(customers.phone, `%${q}%`)) : undefined)
+    .where(
+      and(
+        eq(customers.storeId, store.id),
+        q ? or(like(customers.name, `%${q}%`), like(customers.phone, `%${q}%`)) : undefined,
+      ),
+    )
     .orderBy(desc(customers.totalSpent));
 
   const stats = (await db
@@ -32,6 +37,7 @@ export default async function CustomersPage({ searchParams }: PageProps<"/custom
       repeat: sql<number>`sum(case when ${customers.totalSpent} > 0 then 1 else 0 end)`,
     })
     .from(customers)
+    .where(eq(customers.storeId, store.id))
     )[0]!;
 
   return (

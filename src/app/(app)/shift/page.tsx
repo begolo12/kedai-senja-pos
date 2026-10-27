@@ -3,7 +3,7 @@ import Link from "next/link";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { orders, shifts, users } from "@/lib/db/schema";
-import { requireUser } from "@/lib/auth";
+import { requireStore } from "@/lib/auth";
 import { getSettings } from "@/lib/settings";
 import { getOpenShift } from "@/lib/shifts";
 import { formatDateTime, formatMoney } from "@/lib/money";
@@ -14,9 +14,9 @@ import { CloseShiftForm, OpenShiftForm } from "@/components/shift/shift-forms";
 export const metadata: Metadata = { title: "Shift" };
 
 export default async function ShiftPage() {
-  const user = await requireUser();
-  const settings = await getSettings();
-  const current = await getOpenShift(user.id);
+  const { user, store } = await requireStore();
+  const settings = await getSettings(store.id);
+  const current = await getOpenShift(user.id, store.id);
 
   const sales = current
     ? (
@@ -27,7 +27,13 @@ export default async function ShiftPage() {
           cash: sql<number>`coalesce(sum(case when ${orders.paymentMethod} = 'cash' then ${orders.total} else 0 end), 0)`,
         })
         .from(orders)
-        .where(and(eq(orders.shiftId, current.id), eq(orders.status, "completed")))
+        .where(
+          and(
+            eq(orders.storeId, store.id),
+            eq(orders.shiftId, current.id),
+            eq(orders.status, "completed"),
+          ),
+        )
       )[0]!
     : { total: 0, count: 0, cash: 0 };
   const expectedCash = current ? current.openingFloat + Number(sales.cash) : 0;
@@ -39,14 +45,19 @@ export default async function ShiftPage() {
     })
     .from(shifts)
     .innerJoin(users, eq(shifts.userId, users.id))
-    .where(user.role === "admin" ? undefined : eq(shifts.userId, user.id))
+    .where(
+      and(
+        eq(shifts.storeId, store.id),
+        user.role === "admin" ? undefined : eq(shifts.userId, user.id),
+      ),
+    )
     .orderBy(desc(shifts.openedAt))
     .limit(12);
 
   return (
     <div className="mx-auto max-w-5xl space-y-7">
       <PageHeader
-        eyebrow="Laci & kas"
+        eyebrow={`Laci & kas · ${store.name}`}
         title="Shift"
         description="Satu shift per kasir. Tutup shift untuk mencocokkan uang fisik dengan catatan sistem."
       />

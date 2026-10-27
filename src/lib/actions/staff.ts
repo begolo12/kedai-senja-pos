@@ -1,9 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { users } from "@/lib/db/schema";
+import { stores, userStores, users } from "@/lib/db/schema";
 import { assertAdmin, type ActionResult } from "@/lib/auth";
 import { hashPin } from "@/lib/pin";
 import { staffSchema } from "@/lib/validation";
@@ -22,7 +22,22 @@ export async function saveStaffAction(input: unknown): Promise<ActionResult> {
     return { ok: false, error: "Tidak bisa menonaktifkan atau menurunkan role akun sendiri." };
   }
 
+  const storeIds = [...new Set(data.storeIds)];
+  if (data.role === "cashier" && storeIds.length === 0) {
+    return { ok: false, error: "Kasir harus punya minimal satu toko." };
+  }
+  if (storeIds.length > 0) {
+    const allowed = await db
+      .select({ id: stores.id })
+      .from(stores)
+      .where(inArray(stores.id, storeIds));
+    if (allowed.length !== storeIds.length) {
+      return { ok: false, error: "Ada toko yang tidak valid." };
+    }
+  }
+
   try {
+    let userId = data.id;
     if (data.id) {
       const found = await db
         .select()
@@ -54,13 +69,26 @@ export async function saveStaffAction(input: unknown): Promise<ActionResult> {
         .where(eq(users.id, data.id));
     } else {
       if (!data.pin) return { ok: false, error: "PIN wajib untuk staf baru." };
-      await db.insert(users).values({
-        name: data.name,
-        username: data.username,
-        role: data.role,
-        active: data.active,
-        pinHash: hashPin(data.pin),
-      });
+      const [created] = await db
+        .insert(users)
+        .values({
+          name: data.name,
+          username: data.username,
+          role: data.role,
+          active: data.active,
+          pinHash: hashPin(data.pin),
+        })
+        .returning({ id: users.id });
+      userId = created.id;
+    }
+
+    if (userId) {
+      await db.delete(userStores).where(eq(userStores.userId, userId));
+      if (data.role === "cashier") {
+        await db
+          .insert(userStores)
+          .values(storeIds.map((storeId) => ({ userId, storeId })));
+      }
     }
   } catch (error) {
     if (

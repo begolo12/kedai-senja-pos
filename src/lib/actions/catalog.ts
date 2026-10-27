@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { categories, products } from "@/lib/db/schema";
 import { assertAdmin, type ActionResult } from "@/lib/auth";
@@ -21,6 +21,7 @@ function duplicate(error: unknown) {
 export async function saveProductAction(input: unknown): Promise<ActionResult> {
   const auth = await assertAdmin();
   if (!auth.ok) return auth;
+  const storeId = auth.store.id;
 
   const parsed = productSchema.safeParse(input);
   if (!parsed.success) {
@@ -34,7 +35,7 @@ export async function saveProductAction(input: unknown): Promise<ActionResult> {
       const found = await db
         .select({ id: products.id })
         .from(products)
-        .where(eq(products.id, data.id))
+        .where(and(eq(products.id, data.id), eq(products.storeId, storeId)))
         .limit(1);
       if (!found[0]) return { ok: false, error: "Produk tidak ditemukan." };
       await db
@@ -53,9 +54,10 @@ export async function saveProductAction(input: unknown): Promise<ActionResult> {
           active: data.active,
           updatedAt: now,
         })
-        .where(eq(products.id, data.id));
+        .where(and(eq(products.id, data.id), eq(products.storeId, storeId)));
     } else {
       await db.insert(products).values({
+        storeId,
         name: data.name,
         sku: data.sku.toUpperCase(),
         barcode: data.barcode || null,
@@ -84,6 +86,7 @@ export async function saveCategoryAction(input: unknown): Promise<ActionResult> 
   const auth = await assertAdmin();
   if (!auth.ok) return auth;
 
+  const storeId = auth.store.id;
   const parsed = categorySchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Data tidak valid." };
@@ -94,11 +97,11 @@ export async function saveCategoryAction(input: unknown): Promise<ActionResult> 
       await db
         .update(categories)
         .set({ name: data.name, color: data.color, sortOrder: data.sortOrder })
-        .where(eq(categories.id, data.id));
+        .where(and(eq(categories.id, data.id), eq(categories.storeId, storeId)));
     } else {
       await db
         .insert(categories)
-        .values({ name: data.name, color: data.color, sortOrder: data.sortOrder });
+        .values({ storeId, name: data.name, color: data.color, sortOrder: data.sortOrder });
     }
   } catch (error) {
     if (duplicate(error)) return { ok: false, error: "Nama kategori sudah ada." };
@@ -117,11 +120,13 @@ export async function deleteCategoryAction(id: number): Promise<ActionResult> {
   const used = await db
     .select({ id: products.id })
     .from(products)
-    .where(eq(products.categoryId, id))
+    .where(and(eq(products.categoryId, id), eq(products.storeId, auth.store.id)))
     .limit(1);
   if (used[0]) return { ok: false, error: "Kategori masih dipakai produk." };
 
-  await db.delete(categories).where(eq(categories.id, id));
+  await db
+    .delete(categories)
+    .where(and(eq(categories.id, id), eq(categories.storeId, auth.store.id)));
   revalidatePath("/products");
   revalidatePath("/pos");
   return { ok: true };
@@ -135,14 +140,14 @@ export async function toggleProductAction(id: number): Promise<ActionResult> {
   const found = await db
     .select({ active: products.active })
     .from(products)
-    .where(eq(products.id, id))
+    .where(and(eq(products.id, id), eq(products.storeId, auth.store.id)))
     .limit(1);
   if (!found[0]) return { ok: false, error: "Produk tidak ditemukan." };
 
   await db
     .update(products)
     .set({ active: !found[0].active, updatedAt: new Date() })
-    .where(eq(products.id, id));
+    .where(and(eq(products.id, id), eq(products.storeId, auth.store.id)));
   revalidatePath("/products");
   revalidatePath("/pos");
   return { ok: true };
@@ -154,6 +159,7 @@ export async function importMenuAction(csv: string): Promise<ActionResult & { cr
     return { ok: false, error: "CSV terlalu besar." };
   }
 
+  const storeId = auth.store.id;
   const rows = parseCsv(csv.replace(/^\uFEFF/, ""));
   if (rows.length === 0) return { ok: false, error: "CSV kosong." };
 
@@ -161,10 +167,16 @@ export async function importMenuAction(csv: string): Promise<ActionResult & { cr
   const start = header[0]?.includes("nama") ? 1 : 0;
   if (rows.length - start > 500) return { ok: false, error: "Maksimal 500 baris." };
 
-  const existingCategories = await db.select().from(categories);
+  const existingCategories = await db
+    .select()
+    .from(categories)
+    .where(eq(categories.storeId, storeId));
   const categoryMap = new Map(existingCategories.map((category) => [category.name.toLowerCase(), category.id]));
   const palette = ["#a2542a", "#6b7a4f", "#8c4a3c", "#b07b3a", "#4f5b66", "#7a5c8c"];
-  const existingProducts = await db.select({ id: products.id, name: products.name, sku: products.sku }).from(products);
+  const existingProducts = await db
+    .select({ id: products.id, name: products.name, sku: products.sku })
+    .from(products)
+    .where(eq(products.storeId, storeId));
   const byName = new Map(existingProducts.map((product) => [product.name.toLowerCase(), product]));
   const usedSku = new Set(existingProducts.map((product) => product.sku));
 
@@ -188,6 +200,7 @@ export async function importMenuAction(csv: string): Promise<ActionResult & { cr
         const [inserted] = await db
           .insert(categories)
           .values({
+            storeId,
             name: categoryName,
             color: palette[categoryMap.size % palette.length],
             sortOrder: categoryMap.size + 1,
@@ -213,7 +226,7 @@ export async function importMenuAction(csv: string): Promise<ActionResult & { cr
           active: true,
           updatedAt: new Date(),
         })
-        .where(eq(products.id, existing.id));
+        .where(and(eq(products.id, existing.id), eq(products.storeId, storeId)));
       updated++;
       continue;
     }
@@ -225,6 +238,7 @@ export async function importMenuAction(csv: string): Promise<ActionResult & { cr
     usedSku.add(sku);
 
     await db.insert(products).values({
+      storeId,
       name,
       sku,
       categoryId,

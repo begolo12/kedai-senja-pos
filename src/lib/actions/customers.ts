@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { customers } from "@/lib/db/schema";
 import { assertAdmin, type ActionResult } from "@/lib/auth";
@@ -16,6 +16,7 @@ export async function saveCustomerAction(input: unknown): Promise<ActionResult> 
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Data tidak valid." };
   }
   const data = parsed.data;
+  const storeId = auth.store.id;
   const phone = data.phone?.trim() || null;
   const email = data.email?.trim() || null;
 
@@ -24,15 +25,15 @@ export async function saveCustomerAction(input: unknown): Promise<ActionResult> 
       const found = await db
         .select({ id: customers.id })
         .from(customers)
-        .where(eq(customers.id, data.id))
+        .where(and(eq(customers.id, data.id), eq(customers.storeId, storeId)))
         .limit(1);
       if (!found[0]) return { ok: false, error: "Pelanggan tidak ditemukan." };
       await db
         .update(customers)
         .set({ name: data.name, phone, email })
-        .where(eq(customers.id, data.id));
+        .where(and(eq(customers.id, data.id), eq(customers.storeId, storeId)));
     } else {
-      await db.insert(customers).values({ name: data.name, phone, email });
+      await db.insert(customers).values({ storeId, name: data.name, phone, email });
     }
   } catch (error) {
     if (

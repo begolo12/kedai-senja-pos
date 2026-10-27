@@ -16,15 +16,20 @@ import { ImportMenuDialog } from "@/components/products/import-menu-dialog";
 export const metadata: Metadata = { title: "Produk" };
 
 export default async function ProductsPage({ searchParams }: PageProps<"/products">) {
-  await requireAdmin();
+  const { store } = await requireAdmin();
   const params = await searchParams;
   const q = typeof params.q === "string" ? params.q.trim() : "";
   const category = typeof params.category === "string" ? Number(params.category) : 0;
-  const settings = await getSettings();
+  const settings = await getSettings(store.id);
 
-  const cats = await db.select().from(categories).orderBy(asc(categories.sortOrder));
+  const cats = await db
+    .select()
+    .from(categories)
+    .where(eq(categories.storeId, store.id))
+    .orderBy(asc(categories.sortOrder));
 
   const filters = [
+    eq(products.storeId, store.id),
     q
       ? or(
           like(products.name, `%${q}%`),
@@ -54,12 +59,13 @@ export default async function ProductsPage({ searchParams }: PageProps<"/product
       value: sql<number>`coalesce(sum(${products.stock} * ${products.cost}), 0)`,
     })
     .from(products)
+    .where(eq(products.storeId, store.id))
     )[0]!;
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <PageHeader
-        eyebrow="Katalog"
+        eyebrow={`Katalog · ${store.name}`}
         title="Produk"
         description="Harga, modal, dan stok. Produk nonaktif hilang dari kasir tapi riwayatnya tetap utuh."
         actions={

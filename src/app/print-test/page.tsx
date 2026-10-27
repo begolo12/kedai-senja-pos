@@ -7,8 +7,8 @@ import { Button } from "@/components/ui/button";
 import { PrintButton } from "@/components/receipt/print-button";
 
 export default async function PrintTestPage() {
-  await requireAdmin();
-  const settings = await getSettings();
+  const { store } = await requireAdmin();
+  const settings = await getSettings(store.id);
   const paper = settings.receiptWidth === "58" ? "58" : "80";
 
   return (

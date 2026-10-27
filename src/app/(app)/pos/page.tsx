@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { LockKeyhole } from "lucide-react";
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { categories, customers, products } from "@/lib/db/schema";
-import { requireUser } from "@/lib/auth";
+import { requireStore } from "@/lib/auth";
 import { getSettings } from "@/lib/settings";
 import { getOpenShift } from "@/lib/shifts";
 import { Button } from "@/components/ui/button";
@@ -14,9 +14,9 @@ import { PageHeader } from "@/components/shared/page-header";
 export const metadata: Metadata = { title: "Kasir" };
 
 export default async function PosPage() {
-  const user = await requireUser();
-  const settings = await getSettings();
-  const shift = await getOpenShift(user.id);
+  const { user, store } = await requireStore();
+  const settings = await getSettings(store.id);
+  const shift = await getOpenShift(user.id, store.id);
 
   if (!shift) {
     return (
@@ -52,10 +52,14 @@ export default async function PosPage() {
     })
     .from(products)
     .leftJoin(categories, eq(products.categoryId, categories.id))
-    .where(eq(products.active, true))
+    .where(and(eq(products.storeId, store.id), eq(products.active, true)))
     .orderBy(asc(products.name));
 
-  const cats = await db.select().from(categories).orderBy(asc(categories.sortOrder));
+  const cats = await db
+    .select()
+    .from(categories)
+    .where(eq(categories.storeId, store.id))
+    .orderBy(asc(categories.sortOrder));
   const customerList = await db
     .select({
       id: customers.id,
@@ -64,6 +68,7 @@ export default async function PosPage() {
       points: customers.points,
     })
     .from(customers)
+    .where(eq(customers.storeId, store.id))
     .orderBy(asc(customers.name));
 
   return (

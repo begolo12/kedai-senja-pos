@@ -1,7 +1,8 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "./db";
-import { users, type User } from "./db/schema";
+import { stores, users, type Store, type User } from "./db/schema";
 import { readApiToken } from "./session";
+import { userCanUseStore } from "./auth";
 
 const DEFAULT_ORIGINS = [
   "capacitor://localhost",
@@ -38,18 +39,26 @@ export function json(
   return Response.json(data, { status, headers: corsHeaders(request) });
 }
 
-export async function getMobileUser(request: Request): Promise<User | null> {
+export async function getMobileContext(
+  request: Request,
+): Promise<{ user: User; store: Store } | null> {
   const header = request.headers.get("authorization") ?? "";
   const token = header.startsWith("Bearer ") ? header.slice(7) : undefined;
   const session = readApiToken(token);
   if (!session) return null;
-  const found = await db
-    .select()
-    .from(users)
-    .where(eq(users.id, session.userId))
-    .limit(1);
-  const user = found[0];
-  return user && user.active ? user : null;
+  const [userRows, storeRows] = await Promise.all([
+    db.select().from(users).where(eq(users.id, session.userId)).limit(1),
+    db
+      .select()
+      .from(stores)
+      .where(and(eq(stores.id, session.storeId), eq(stores.active, true)))
+      .limit(1),
+  ]);
+  const user = userRows[0];
+  const store = storeRows[0];
+  if (!user || !user.active || !store) return null;
+  if (!(await userCanUseStore(user, store.id))) return null;
+  return { user, store };
 }
 
 export function mobileUser(user: User) {
@@ -58,6 +67,15 @@ export function mobileUser(user: User) {
     name: user.name,
     username: user.username,
     role: user.role,
+  };
+}
+
+export function mobileStore(store: Store) {
+  return {
+    id: store.id,
+    code: store.code,
+    name: store.name,
+    address: store.address,
   };
 }
 

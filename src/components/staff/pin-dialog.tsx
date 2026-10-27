@@ -44,6 +44,7 @@ export function PinDialog({ staff }: { staff: StaffValues }) {
         username: staff.username,
         role: staff.role,
         active: staff.active,
+        storeIds: staff.storeIds,
         pin,
       });
       if (!result.ok) {

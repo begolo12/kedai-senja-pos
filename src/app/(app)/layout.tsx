@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ArrowUpRight, AudioLines } from "lucide-react";
-import { requireUser } from "@/lib/auth";
+import { requireStore } from "@/lib/auth";
 import { getOpenShift } from "@/lib/shifts";
 import { getSettings } from "@/lib/settings";
 import { formatDate, formatMoney } from "@/lib/money";
@@ -8,9 +8,9 @@ import { SidebarNav } from "@/components/nav";
 import { MobileNav, UserMenu } from "@/components/user-menu";
 
 export default async function AppLayout({ children }: LayoutProps<"/">) {
-  const user = await requireUser();
-  const settings = await getSettings();
-  const shift = await getOpenShift(user.id);
+  const { user, store } = await requireStore();
+  const settings = await getSettings(store.id);
+  const shift = await getOpenShift(user.id, store.id);
 
   return (
     <div className="flex min-h-dvh flex-1 bg-background">
@@ -24,6 +24,12 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
             <span className="mt-2 block font-serif text-[26px] leading-none">
               {settings.storeName}
             </span>
+          </Link>
+          <Link
+            href="/select-store"
+            className="mt-2 inline-block text-[10px] tracking-[0.14em] text-sidebar-foreground/60 uppercase underline-offset-4 hover:text-sidebar-foreground hover:underline"
+          >
+            Ganti toko
           </Link>
         </div>
 
@@ -64,7 +70,11 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
         <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-3 border-b border-border/80 bg-background/85 px-4 backdrop-blur-sm sm:px-6">
           <div className="flex items-center gap-3">
             <MobileNav role={user.role} />
-            <p className="text-[11px] tracking-[0.16em] text-muted-foreground uppercase">
+            <p className="truncate text-[11px] tracking-[0.16em] text-muted-foreground uppercase">
+              <Link href="/select-store" className="text-foreground/80 hover:underline">
+                {store.name}
+              </Link>
+              <span className="mx-2 text-border">/</span>
               {formatDate(new Date())}
               <span className="mx-2 text-border">/</span>
               <span className="text-foreground/70">Kasir {user.name.split(" ")[0]}</span>

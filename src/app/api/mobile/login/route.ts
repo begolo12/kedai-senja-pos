@@ -2,14 +2,16 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
+import { getAllowedStores } from "@/lib/auth";
 import { verifyPin } from "@/lib/pin";
-import { createApiToken } from "@/lib/session";
+import { createPendingToken } from "@/lib/session";
 import {
   corsHeaders,
   json,
   mobileLoginBlocked,
   mobileLoginFailed,
   mobileLoginOk,
+  mobileStore,
   mobileUser,
 } from "@/lib/mobile-auth";
 
@@ -25,7 +27,7 @@ export async function OPTIONS(request: Request) {
 export async function POST(request: Request) {
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
-    return json(request, { error: "Username atau PIN tidak valid." }, 400);
+    return json(request, { error: "ID atau PIN tidak valid." }, 400);
   }
   const username = parsed.data.username.toLowerCase();
 
@@ -41,12 +43,14 @@ export async function POST(request: Request) {
   const user = found[0];
   if (!user || !user.active || !verifyPin(parsed.data.pin, user.pinHash)) {
     mobileLoginFailed(username);
-    return json(request, { error: "Username atau PIN salah." }, 401);
+    return json(request, { error: "ID atau PIN salah." }, 401);
   }
 
   mobileLoginOk(username);
+  const stores = await getAllowedStores(user);
   return json(request, {
-    token: createApiToken(user.id),
+    pendingToken: createPendingToken(user.id),
     user: mobileUser(user),
+    stores: stores.map(mobileStore),
   });
 }

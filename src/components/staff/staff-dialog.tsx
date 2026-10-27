@@ -23,15 +23,23 @@ export type StaffValues = {
   username: string;
   role: "admin" | "cashier";
   active: boolean;
+  storeIds: number[];
 };
 
-export function StaffDialog({ staff }: { staff?: StaffValues }) {
+export function StaffDialog({
+  staff,
+  stores,
+}: {
+  staff?: StaffValues;
+  stores: { id: number; name: string }[];
+}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState(staff?.name ?? "");
   const [username, setUsername] = useState(staff?.username ?? "");
   const [role, setRole] = useState<"admin" | "cashier">(staff?.role ?? "cashier");
   const [active, setActive] = useState(staff?.active ?? true);
+  const [storeIds, setStoreIds] = useState<number[]>(staff?.storeIds ?? []);
   const [pin, setPin] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -79,6 +87,7 @@ export function StaffDialog({ staff }: { staff?: StaffValues }) {
                 role,
                 pin: pin || undefined,
                 active,
+                storeIds,
               });
               if (!result.ok) {
                 setError(result.error);
@@ -92,6 +101,7 @@ export function StaffDialog({ staff }: { staff?: StaffValues }) {
                 setPin("");
                 setRole("cashier");
                 setActive(true);
+                setStoreIds([]);
               }
               router.refresh();
             });
@@ -146,6 +156,39 @@ export function StaffDialog({ staff }: { staff?: StaffValues }) {
               />
             </div>
           </div>
+          {role === "cashier" ? (
+            <div className="space-y-1">
+              <span className="text-[10px] tracking-[0.12em] text-muted-foreground uppercase">
+                Toko yang boleh dibuka
+              </span>
+              <div className="grid grid-cols-2 gap-1.5">
+                {stores.map((store) => (
+                  <label key={store.id} className="flex items-center gap-2 border border-border px-2 py-1.5 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={storeIds.includes(store.id)}
+                      onChange={(event) =>
+                        setStoreIds((prev) =>
+                          event.target.checked
+                            ? [...prev, store.id]
+                            : prev.filter((id) => id !== store.id),
+                        )
+                      }
+                      className="size-3.5 accent-foreground"
+                    />
+                    {store.name}
+                  </label>
+                ))}
+              </div>
+              {stores.length === 0 ? (
+                <p className="text-[11px] text-destructive">Buat toko dulu di menu Toko.</p>
+              ) : null}
+            </div>
+          ) : (
+            <p className="border border-dashed px-2 py-1.5 text-[11px] text-muted-foreground">
+              Manajemen otomatis bisa membuka semua toko.
+            </p>
+          )}
           <label className="flex items-center gap-2 text-sm">
             <input
               type="checkbox"

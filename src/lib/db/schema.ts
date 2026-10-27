@@ -4,11 +4,34 @@ import {
   index,
   integer,
   pgTable,
+  primaryKey,
   serial,
   text,
   timestamp,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
+
+export const stores = pgTable("stores", {
+  id: serial("id").primaryKey(),
+  code: text("code").notNull().unique(),
+  name: text("name").notNull(),
+  address: text("address").notNull().default(""),
+  phone: text("phone").notNull().default(""),
+  currency: text("currency").notNull().default("IDR"),
+  taxRate: integer("tax_rate").notNull().default(1100),
+  receiptWidth: text("receipt_width", { enum: ["58", "80"] })
+    .notNull()
+    .default("80"),
+  qrisPayload: text("qris_payload").notNull().default(""),
+  receiptFooter: text("receipt_footer").notNull().default("Terima kasih."),
+  pointsPerAmount: bigint("points_per_amount", { mode: "number" })
+    .notNull()
+    .default(1_000_000),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
 
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
@@ -24,17 +47,40 @@ export const users = pgTable("users", {
     .defaultNow(),
 });
 
-export const categories = pgTable("categories", {
-  id: serial("id").primaryKey(),
-  name: text("name").notNull().unique(),
-  color: text("color").notNull().default("#8a6f4a"),
-  sortOrder: integer("sort_order").notNull().default(0),
-});
+export const userStores = pgTable(
+  "user_stores",
+  {
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    storeId: integer("store_id")
+      .notNull()
+      .references(() => stores.id, { onDelete: "cascade" }),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.storeId] })],
+);
+
+export const categories = pgTable(
+  "categories",
+  {
+    id: serial("id").primaryKey(),
+    storeId: integer("store_id")
+      .notNull()
+      .references(() => stores.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    color: text("color").notNull().default("#8a6f4a"),
+    sortOrder: integer("sort_order").notNull().default(0),
+  },
+  (t) => [uniqueIndex("categories_store_name_idx").on(t.storeId, t.name)],
+);
 
 export const products = pgTable(
   "products",
   {
     id: serial("id").primaryKey(),
+    storeId: integer("store_id")
+      .notNull()
+      .references(() => stores.id, { onDelete: "cascade" }),
     sku: text("sku").notNull(),
     barcode: text("barcode"),
     name: text("name").notNull(),
@@ -56,9 +102,9 @@ export const products = pgTable(
       .defaultNow(),
   },
   (t) => [
-    uniqueIndex("products_sku_idx").on(t.sku),
-    uniqueIndex("products_barcode_idx").on(t.barcode),
-    index("products_category_idx").on(t.categoryId),
+    uniqueIndex("products_store_sku_idx").on(t.storeId, t.sku),
+    uniqueIndex("products_store_barcode_idx").on(t.storeId, t.barcode),
+    index("products_store_category_idx").on(t.storeId, t.categoryId),
   ],
 );
 
@@ -66,6 +112,9 @@ export const customers = pgTable(
   "customers",
   {
     id: serial("id").primaryKey(),
+    storeId: integer("store_id")
+      .notNull()
+      .references(() => stores.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     phone: text("phone"),
     email: text("email"),
@@ -75,13 +124,16 @@ export const customers = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (t) => [uniqueIndex("customers_phone_idx").on(t.phone)],
+  (t) => [uniqueIndex("customers_store_phone_idx").on(t.storeId, t.phone)],
 );
 
 export const shifts = pgTable(
   "shifts",
   {
     id: serial("id").primaryKey(),
+    storeId: integer("store_id")
+      .notNull()
+      .references(() => stores.id, { onDelete: "cascade" }),
     userId: integer("user_id")
       .notNull()
       .references(() => users.id),
@@ -99,13 +151,18 @@ export const shifts = pgTable(
       .notNull()
       .default("open"),
   },
-  (t) => [index("shifts_user_status_idx").on(t.userId, t.status)],
+  (t) => [
+    index("shifts_store_user_status_idx").on(t.storeId, t.userId, t.status),
+  ],
 );
 
 export const orders = pgTable(
   "orders",
   {
     id: serial("id").primaryKey(),
+    storeId: integer("store_id")
+      .notNull()
+      .references(() => stores.id, { onDelete: "cascade" }),
     number: text("number").notNull(),
     clientId: text("client_id").notNull(),
     shiftId: integer("shift_id").references(() => shifts.id),
@@ -147,9 +204,9 @@ export const orders = pgTable(
     refundedBy: integer("refunded_by").references(() => users.id),
   },
   (t) => [
-    uniqueIndex("orders_number_idx").on(t.number),
+    uniqueIndex("orders_store_number_idx").on(t.storeId, t.number),
     uniqueIndex("orders_client_id_idx").on(t.clientId),
-    index("orders_created_idx").on(t.createdAt),
+    index("orders_store_created_idx").on(t.storeId, t.createdAt),
     index("orders_shift_idx").on(t.shiftId),
   ],
 );
@@ -179,6 +236,9 @@ export const stockMovements = pgTable(
   "stock_movements",
   {
     id: serial("id").primaryKey(),
+    storeId: integer("store_id")
+      .notNull()
+      .references(() => stores.id, { onDelete: "cascade" }),
     productId: integer("product_id")
       .notNull()
       .references(() => products.id, { onDelete: "cascade" }),
@@ -194,34 +254,20 @@ export const stockMovements = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (t) => [index("stock_movements_product_idx").on(t.productId, t.createdAt)],
+  (t) => [
+    index("stock_movements_store_product_idx").on(
+      t.storeId,
+      t.productId,
+      t.createdAt,
+    ),
+  ],
 );
 
-export const settings = pgTable("settings", {
-  id: integer("id").primaryKey().default(1),
-  storeName: text("store_name").notNull().default("Kedai Senja"),
-  address: text("address").notNull().default(""),
-  phone: text("phone").notNull().default(""),
-  currency: text("currency").notNull().default("IDR"),
-  taxRate: integer("tax_rate").notNull().default(1100),
-  receiptFooter: text("receipt_footer").notNull().default("Terima kasih."),
-  receiptWidth: text("receipt_width", { enum: ["58", "80"] })
-    .notNull()
-    .default("80"),
-  qrisPayload: text("qris_payload").notNull().default(""),
-  pointsPerAmount: bigint("points_per_amount", { mode: "number" })
-    .notNull()
-    .default(1_000_000),
-  updatedAt: timestamp("updated_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-});
-
+export type Store = typeof stores.$inferSelect;
 export type Product = typeof products.$inferSelect;
 export type Order = typeof orders.$inferSelect;
 export type OrderItem = typeof orderItems.$inferSelect;
 export type Customer = typeof customers.$inferSelect;
-export type Settings = typeof settings.$inferSelect;
 export type User = typeof users.$inferSelect;
 export type Shift = typeof shifts.$inferSelect;
 export type Category = typeof categories.$inferSelect;

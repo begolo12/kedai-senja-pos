@@ -8,11 +8,10 @@ import {
   orderItems,
   orders,
   products,
-  settings,
   shifts,
   stockMovements,
 } from "@/lib/db/schema";
-import { getCurrentUser } from "@/lib/auth";
+import { assertAdmin, assertStore } from "@/lib/auth";
 import { computeTotals, orderNumber } from "@/lib/money";
 import { dayStart } from "@/lib/dates";
 import { checkoutSchema } from "@/lib/validation";
@@ -22,8 +21,9 @@ export type CheckoutResult =
   | { ok: false; error: string };
 
 export async function checkoutAction(input: unknown): Promise<CheckoutResult> {
-  const user = await getCurrentUser();
-  if (!user) return { ok: false, error: "Sesi berakhir. Masuk ulang." };
+  const auth = await assertStore();
+  if (!auth.ok) return auth;
+  const { user, store } = auth;
 
   const parsed = checkoutSchema.safeParse(input);
   if (!parsed.success) {
@@ -36,12 +36,16 @@ export async function checkoutAction(input: unknown): Promise<CheckoutResult> {
       .select({
         id: orders.id,
         number: orders.number,
+        storeId: orders.storeId,
         changeDue: orders.changeDue,
         total: orders.total,
       })
       .from(orders)
       .where(eq(orders.clientId, data.clientId))
       .limit(1);
+    if (existing[0] && existing[0].storeId !== store.id) {
+      return { ok: false as const, error: "ID pesanan sudah dipakai toko lain." };
+    }
     if (existing[0]) {
       return { ok: true as const, orderId: existing[0].id, ...existing[0] };
     }
@@ -49,7 +53,13 @@ export async function checkoutAction(input: unknown): Promise<CheckoutResult> {
     const openShifts = await tx
       .select()
       .from(shifts)
-      .where(and(eq(shifts.userId, user.id), eq(shifts.status, "open")))
+      .where(
+        and(
+          eq(shifts.userId, user.id),
+          eq(shifts.storeId, store.id),
+          eq(shifts.status, "open"),
+        ),
+      )
       .limit(1);
     const shift = openShifts[0];
     if (!shift) return { ok: false as const, error: "Buka shift dulu sebelum transaksi." };
@@ -71,7 +81,7 @@ export async function checkoutAction(input: unknown): Promise<CheckoutResult> {
       const found = await tx
         .select()
         .from(products)
-        .where(eq(products.id, productId))
+        .where(and(eq(products.id, productId), eq(products.storeId, store.id)))
         .for("update");
       rows.push({ product: found[0], qty, note });
     }
@@ -98,14 +108,7 @@ export async function checkoutAction(input: unknown): Promise<CheckoutResult> {
       note,
       lineTotal: product!.price * qty,
     }));
-    const config = (
-      await tx
-        .select({ taxRate: settings.taxRate, pointsPerAmount: settings.pointsPerAmount })
-        .from(settings)
-        .where(eq(settings.id, 1))
-        .limit(1)
-    )[0];
-    const taxRate = config?.taxRate ?? 0;
+    const taxRate = store.taxRate;
     const totals = computeTotals(
       lines.map((l) => ({ unitPrice: l.product.price, qty: l.qty })),
       { discountType: data.discountType, discountValue: data.discountValue, taxRate },
@@ -123,14 +126,19 @@ export async function checkoutAction(input: unknown): Promise<CheckoutResult> {
       const found = await tx
         .select({ id: customers.id })
         .from(customers)
-        .where(eq(customers.id, data.customerId))
+        .where(
+          and(
+            eq(customers.id, data.customerId),
+            eq(customers.storeId, store.id),
+          ),
+        )
         .limit(1);
       customerId = found[0]?.id ?? null;
     }
 
     const pointsEarned =
-      customerId && config?.pointsPerAmount
-        ? Math.floor(totals.total / config.pointsPerAmount)
+      customerId && store.pointsPerAmount
+        ? Math.floor(totals.total / store.pointsPerAmount)
         : 0;
 
     // Serialises the daily sequence; single-store scale makes this cheap and safe.
@@ -139,7 +147,12 @@ export async function checkoutAction(input: unknown): Promise<CheckoutResult> {
       await tx
         .select({ n: sql<string>`count(*)` })
         .from(orders)
-        .where(sql`${orders.createdAt} >= ${new Date(dayStart(createdAt))}`)
+        .where(
+          and(
+            eq(orders.storeId, store.id),
+            sql`${orders.createdAt} >= ${new Date(dayStart(createdAt))}`,
+          ),
+        )
     )[0]?.n;
 
     const [order] = await tx
@@ -147,6 +160,7 @@ export async function checkoutAction(input: unknown): Promise<CheckoutResult> {
       .values({
         number: orderNumber(createdAt, Number(countToday ?? 0) + 1),
         clientId: data.clientId,
+        storeId: store.id,
         shiftId: shift.id,
         userId: user.id,
         customerId,
@@ -186,8 +200,9 @@ export async function checkoutAction(input: unknown): Promise<CheckoutResult> {
       await tx
         .update(products)
         .set({ stock: sql`${products.stock} - ${line.qty}`, updatedAt: createdAt })
-        .where(eq(products.id, line.product.id));
+        .where(and(eq(products.id, line.product.id), eq(products.storeId, store.id)));
       await tx.insert(stockMovements).values({
+        storeId: store.id,
         productId: line.product.id,
         delta: -line.qty,
         reason: "sale",
@@ -224,9 +239,9 @@ export async function refundOrderAction(
   orderId: number,
   reason: string,
 ): Promise<RefundResult> {
-  const user = await getCurrentUser();
-  if (!user) return { ok: false, error: "Sesi berakhir. Masuk ulang." };
-  if (user.role !== "admin") return { ok: false, error: "Hanya admin yang boleh refund." };
+  const auth = await assertAdmin();
+  if (!auth.ok) return auth;
+  const { user, store } = auth;
   if (!Number.isInteger(orderId) || orderId <= 0) {
     return { ok: false, error: "Pesanan tidak valid." };
   }
@@ -239,7 +254,7 @@ export async function refundOrderAction(
     const found = await tx
       .select()
       .from(orders)
-      .where(eq(orders.id, orderId))
+      .where(and(eq(orders.id, orderId), eq(orders.storeId, store.id)))
       .for("update");
     const order = found[0];
     if (!order) return { ok: false as const, error: "Pesanan tidak ditemukan." };
@@ -257,8 +272,14 @@ export async function refundOrderAction(
       await tx
         .update(products)
         .set({ stock: sql`${products.stock} + ${item.qty}`, updatedAt: now })
-        .where(eq(products.id, item.productId));
+        .where(
+          and(
+            eq(products.id, item.productId),
+            eq(products.storeId, store.id),
+          ),
+        );
       await tx.insert(stockMovements).values({
+        storeId: store.id,
         productId: item.productId,
         delta: item.qty,
         reason: "refund",
@@ -282,7 +303,12 @@ export async function refundOrderAction(
           points: sql`max(0, ${customers.points} - ${order.pointsEarned})`,
           totalSpent: sql`max(0, ${customers.totalSpent} - ${order.total})`,
         })
-        .where(eq(customers.id, order.customerId));
+        .where(
+          and(
+            eq(customers.id, order.customerId),
+            eq(customers.storeId, store.id),
+          ),
+        );
     }
 
     return { ok: true as const };

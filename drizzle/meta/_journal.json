@@ -5,15 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1793091209095,
-      "tag": "0000_flimsy_exodus",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1793094272246,
-      "tag": "0001_stale_marvel_apes",
+      "when": 1793097477321,
+      "tag": "0000_groovy_rhino",
       "breakpoints": true
     }
   ]

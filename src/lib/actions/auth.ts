@@ -5,7 +5,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
 import { verifyPin } from "@/lib/pin";
-import { clearSession, writeSession } from "@/lib/session";
+import { clearSession, writePending } from "@/lib/session";
 import { loginSchema } from "@/lib/validation";
 
 export type LoginState = { error?: string; username?: string };
@@ -60,8 +60,8 @@ export async function loginAction(
   }
 
   attempts.delete(username);
-  await writeSession(user.id);
-  redirect(user.role === "admin" ? "/" : "/pos");
+  await writePending(user.id);
+  redirect("/select-store");
 }
 
 export async function logoutAction() {

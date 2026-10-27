@@ -886,3 +886,74 @@ h2 {
   background: #fff;
   padding: 4px;
 }
+
+.store-picker {
+  min-height: 100dvh;
+  background: var(--paper);
+  padding: 24px 16px calc(24px + env(safe-area-inset-bottom));
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.store-head h1 {
+  font-size: 38px;
+  margin-top: 4px;
+}
+
+.store-head p {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 6px 0 18px;
+}
+
+.store-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.store-card {
+  text-align: left;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  box-shadow: 3px 3px 0 0 var(--line);
+}
+
+.store-card strong {
+  font-family: "Iowan Old Style", Georgia, serif;
+  font-size: 22px;
+  font-weight: 400;
+}
+
+.store-card small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.store-open {
+  margin-top: 10px;
+  color: var(--oxide);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.empty-store {
+  border: 1px dashed var(--line);
+  padding: 40px 20px;
+  text-align: center;
+}
+
+.picker-back {
+  margin-top: 18px;
+  width: 100%;
+}
+
+@media (min-width: 640px) {
+  .store-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}

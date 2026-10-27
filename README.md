@@ -1,8 +1,9 @@
 # Kedai Senja POS
 
-POS warkop/kedai: ricebowl, sushi, minuman bubuk, camilan. Kasir web,
-aplikasi Android offline-first, varian menu, tipe dine-in/bungkus, meja,
-QRIS, stok, shift, laporan, dan struk thermal 58/80 mm.
+POS warkop multi-toko: ricebowl, sushi, minuman bubuk, camilan. Satu akun
+manajemen membuka semua toko; kasir hanya toko yang ditugaskan. Kasir web,
+aplikasi Android offline-first, varian menu, dine-in/bungkus, meja, QRIS,
+stok, shift, laporan per toko, dan struk thermal 58/80 mm.
 
 - Web production: https://kedai-senja-pos.vercel.app
 - Repo: https://github.com/begolo12/kedai-senja-pos (publik)
@@ -32,16 +33,20 @@ lalu Next.js. Buka http://localhost:3000.
 Seed lokal berisi menu warkop (ricebowl, sushi, minuman bubuk, camilan,
 tambahan) dengan varian seperti level pedas/less sugar.
 
-Login selalu memakai **ID + PIN**. Tidak ada password. Manajemen dapat
-menambah akun, mengganti ID, mengganti PIN, dan menonaktifkan akun dari menu
-**Staf**.
+Login memakai **ID + PIN**, lalu **pilih toko**. Tidak ada password.
+Manajemen membuka semua toko; kasir hanya toko yang dicentang di menu
+**Staf**. Manajemen dapat menambah toko (dengan opsi salin menu), mengganti
+ID/PIN, dan menonaktifkan akun.
 
 Akun development (database lokal kosong):
 
 | ID Login | PIN | Akses |
 | --- | --- | --- |
-| `manajemen` | `1234` | manajemen/admin: semua menu + kelola akun |
-| `kasir` | `5678` | kasir: POS + shift |
+| `manajemen` | `1234` | semua toko, semua menu, kelola akun |
+| `kasir` | `5678` | Kemang saja: POS + shift |
+
+Seed berisi dua toko: **Warkop Senja — Kemang** dan **Tebet**. Kasir demo
+hanya ditugaskan ke Kemang.
 
 PIN production **tidak** ada di repo: diisi lewat `SEED_ADMIN_PIN` /
 `SEED_CASHIER_PIN` saat seed dan disimpan sebagai secret Vercel.
@@ -78,6 +83,16 @@ DATABASE_URL="..." SEED_ADMIN_PIN="..." SEED_CASHIER_PIN="..." NODE_ENV=producti
 
 Neon/Vercel menyediakan `DATABASE_URL` lewat integrasi. Jangan commit nilai
 apa pun; `.env.local` sudah di-ignore.
+
+## Alur toko
+
+1. Login ID + PIN.
+2. Pilih toko. Manajemen melihat semua toko; kasir melihat yang ditugaskan.
+3. Bekerja di toko itu: menu, stok, pesanan, shift, laporan, QRIS, dan
+   pengaturan terpisah.
+4. **Ganti toko** dari sidebar/topbar tanpa logout.
+5. Manajemen: menu **Toko** → tambah toko, salin menu, edit, aktif/nonaktif,
+   buka toko. Menu **Staf** → centang toko untuk setiap kasir.
 
 ## Alur FnB
 

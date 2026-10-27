@@ -3,6 +3,8 @@
 POS untuk kedai kopi satu lokasi: kasir cepat di meja, kontrol stok yang bisa
 diaudit, laporan harian, dan tablet kasir offline-first. Web memakai
 PostgreSQL (Neon di production); tablet memakai IndexedDB + sinkronisasi.
+Multi-toko: semua data operasional dipisah per toko, satu akun manajemen
+dapat membuka semua toko.
 
 Status: **P0 selesai dan terverifikasi** (lihat `docs/DESIGN.md` dan
 `README.md` untuk cara jalan).
@@ -108,8 +110,11 @@ eksplisit lewat `pnpm db:setup`; tidak ada DDL otomatis di request path.
 ### 3.8 Pengaturan & staf (admin)
 - Identitas toko, alamat, telepon, footer struk.
 - Pajak (basis poin 1/100 %), aturan poin, mata uang (IDR).
-- CRUD staf: nama, ID login, role, PIN, aktif/nonaktif; tidak bisa
-  menonaktifkan diri sendiri atau menghapus admin aktif terakhir.
+- CRUD staf: nama, ID login, role, PIN, aktif/nonaktif, penugasan toko
+  untuk kasir; tidak bisa menonaktifkan diri sendiri atau menghapus admin
+  aktif terakhir.
+- CRUD toko: tambah, salin menu/kategori/stok dari toko aktif, edit,
+  aktif/nonaktif, pilih toko. Konfigurasi pajak, QRIS, footer, poin per toko.
 - Login hanya ID + PIN (tanpa password). Manajemen dapat mengganti PIN
   lewat tombol PIN dengan konfirmasi ulang.
 
@@ -152,14 +157,15 @@ epoch milidetik.
 | Tabel | Kolom penting | Catatan |
 | --- | --- | --- |
 | `users` | name, username unik, pinHash (scrypt), role, active | Role `admin`/`cashier` |
-| `categories` | name unik, color, sortOrder | Warna dipakai sebagai penanda |
-| `products` | sku unik, barcode unik, name, categoryId, price, cost, stock, lowStockAt, unit, options, active | `options` = varian dipisah koma |
-| `customers` | name, phone unik, email, points, totalSpent | Poin = turunan transaksi |
-| `shifts` | userId, openedAt, closedAt, openingFloat, countedCash, expectedCash, status | Satu `open` per user (dijaga action) |
-| `orders` | number unik, clientId unik, shiftId, userId, customerId, subtotal, discount*, taxAmount, total, costTotal, pointsEarned, orderType, tableLabel, paymentMethod, amountPaid, changeDue, status, refunded* | Nomor harian `KDJ-YYMMDD-NNN` |
+| `categories` | storeId, name, color, sortOrder | unik per toko |
+| `products` | storeId, sku, barcode, name, categoryId, price, cost, stock, lowStockAt, unit, options, active | SKU/barcode unik per toko |
+| `customers` | storeId, name, phone, email, points, totalSpent | telepon unik per toko |
+| `shifts` | storeId, userId, openedAt, closedAt, openingFloat, countedCash, expectedCash, status | Satu `open` per user+toko |
+| `orders` | storeId, number, clientId unik, shiftId, userId, customerId, subtotal, discount*, taxAmount, total, costTotal, pointsEarned, orderType, tableLabel, paymentMethod, amountPaid, changeDue, status, refunded* | nomor unik per toko, harian `KDJ-YYMMDD-NNN` |
 | `order_items` | orderId, productId, name, sku, unitPrice, cost, qty, note, lineTotal | Snapshot nama/harga + varian/catatan |
-| `stock_movements` | productId, delta, reason, refType/refId, userId, note | Audit append-only |
-| `settings` | id=1, storeName, address, phone, currency, taxRate, pointsPerAmount, receiptWidth, qrisPayload, receiptFooter | Satu baris; QRIS berupa payload/gambar |
+| `stock_movements` | storeId, productId, delta, reason, refType/refId, userId, note | Audit append-only per toko |
+| `stores` | code unik, name, address, phone, taxRate, receiptWidth, qrisPayload, receiptFooter, pointsPerAmount, active | Konfigurasi + identitas per toko |
+| `user_stores` | userId, storeId | Penugasan kasir ke toko |
 
 **Invarian**
 1. `stock >= 0`; penyesuaian yang membuat minus ditolak.

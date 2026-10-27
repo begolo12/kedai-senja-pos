@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { settings } from "@/lib/db/schema";
+import { stores } from "@/lib/db/schema";
 import { assertAdmin, type ActionResult } from "@/lib/auth";
 import { settingsSchema } from "@/lib/validation";
 
@@ -15,14 +15,25 @@ export async function updateSettingsAction(input: unknown): Promise<ActionResult
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Data tidak valid." };
   }
+  const data = parsed.data;
 
   await db
-    .update(settings)
-    .set({ ...parsed.data, updatedAt: new Date() })
-    .where(eq(settings.id, 1));
+    .update(stores)
+    .set({
+      name: data.storeName,
+      address: data.address,
+      phone: data.phone,
+      taxRate: data.taxRate,
+      receiptWidth: data.receiptWidth,
+      qrisPayload: data.qrisPayload,
+      receiptFooter: data.receiptFooter,
+      pointsPerAmount: data.pointsPerAmount,
+    })
+    .where(eq(stores.id, auth.store.id));
 
   revalidatePath("/settings");
   revalidatePath("/pos");
   revalidatePath("/");
+  revalidatePath("/select-store");
   return { ok: true };
 }

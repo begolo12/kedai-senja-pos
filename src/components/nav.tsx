@@ -10,6 +10,7 @@ import {
   ReceiptText,
   Settings,
   ShoppingBasket,
+  Store,
   UsersRound,
   UserRoundCog,
 } from "lucide-react";
@@ -26,6 +27,7 @@ const NAV = [
 ] as const;
 
 const ADMIN_ONLY_NAV = [
+  { href: "/stores", label: "Toko", icon: Store },
   { href: "/staff", label: "Staf", icon: UserRoundCog },
   { href: "/settings", label: "Pengaturan", icon: Settings },
 ] as const;

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { ArrowUpRight } from "lucide-react";
 import { getCurrentUser } from "@/lib/auth";
-import { getSettings } from "@/lib/settings";
+import { readPending } from "@/lib/session";
 import { LoginForm } from "@/components/login-form";
 
 export const metadata: Metadata = { title: "Masuk" };
@@ -10,7 +10,7 @@ export const metadata: Metadata = { title: "Masuk" };
 export default async function LoginPage() {
   const current = await getCurrentUser();
   if (current) redirect(current.role === "admin" ? "/" : "/pos");
-  const settings = await getSettings();
+  if (await readPending()) redirect("/select-store");
 
   return (
     <div className="grid min-h-dvh flex-1 lg:grid-cols-[1.05fr_1fr]">
@@ -56,12 +56,12 @@ export default async function LoginPage() {
       <section className="flex flex-col justify-center px-6 py-14 sm:px-12 lg:px-16">
         <div className="mx-auto w-full max-w-sm">
           <div className="flex items-center justify-between lg:hidden">
-            <span className="font-serif text-2xl">{settings.storeName}</span>
+            <span className="font-serif text-2xl">{"Kasir Senja"}</span>
             <span className="stamp border-border text-muted-foreground">POS</span>
           </div>
 
           <p className="mt-10 text-[11px] tracking-[0.18em] text-muted-foreground uppercase lg:mt-0">
-            Meja kasir · {settings.storeName}
+            Meja kasir · {"Kasir Senja"}
           </p>
           <h2 className="mt-2 font-serif text-4xl tracking-tight">Selamat datang</h2>
           <p className="mt-2 mb-8 text-sm text-muted-foreground">

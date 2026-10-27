@@ -2,6 +2,13 @@ export type Role = "admin" | "cashier";
 
 export type MobileUser = { id: number; name: string; username: string; role: Role };
 
+export type MobileStore = {
+  id: number;
+  code: string;
+  name: string;
+  address: string;
+};
+
 export type Settings = {
   storeName: string;
   address: string;

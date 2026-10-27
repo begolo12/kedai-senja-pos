@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { products, stockMovements } from "@/lib/db/schema";
 import { assertAdmin, type ActionResult } from "@/lib/auth";
@@ -16,12 +16,13 @@ export async function adjustStockAction(input: unknown): Promise<ActionResult> {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Data tidak valid." };
   }
   const { productId, delta, reason, note } = parsed.data;
+  const storeId = auth.store.id;
 
   const result = await db.transaction(async (tx) => {
     const found = await tx
       .select()
       .from(products)
-      .where(eq(products.id, productId))
+      .where(and(eq(products.id, productId), eq(products.storeId, storeId)))
       .for("update");
     const product = found[0];
     if (!product) return { ok: false as const, error: "Produk tidak ditemukan." };
@@ -32,8 +33,9 @@ export async function adjustStockAction(input: unknown): Promise<ActionResult> {
     await tx
       .update(products)
       .set({ stock: sql`${products.stock} + ${delta}`, updatedAt: now })
-      .where(eq(products.id, productId));
+      .where(and(eq(products.id, productId), eq(products.storeId, storeId)));
     await tx.insert(stockMovements).values({
+      storeId,
       productId,
       delta,
       reason,

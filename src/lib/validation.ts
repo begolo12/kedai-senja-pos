@@ -128,4 +128,21 @@ export const staffSchema = z.object({
     .optional()
     .or(z.literal("")),
   active: z.boolean(),
+  storeIds: z.array(z.number().int().positive()).max(50).default([]),
+});
+export const storeSchema = z.object({
+  id: z.number().int().positive().optional(),
+  name: z.string().trim().min(2, "Nama toko minimal 2 karakter.").max(80),
+  code: z
+    .string()
+    .trim()
+    .min(2, "Kode toko minimal 2 karakter.")
+    .max(24)
+    .regex(/^[a-z0-9-]+$/i, "Kode: huruf, angka, tanda hubung."),
+  address: z.string().trim().max(200).default(""),
+  phone: z.string().trim().max(40).default(""),
+  taxRate: z.number().int().min(0).max(5000),
+  receiptWidth: z.enum(["58", "80"]),
+  active: z.boolean().default(true),
+  copyMenu: z.boolean().default(false),
 });

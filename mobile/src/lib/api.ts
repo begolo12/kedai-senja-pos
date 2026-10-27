@@ -1,4 +1,4 @@
-import type { MobileUser, PendingOrder, Snapshot, SyncResult } from "./types";
+import type { MobileStore, MobileUser, PendingOrder, Snapshot, SyncResult } from "./types";
 
 const API_URL = (import.meta.env.VITE_API_URL ?? "http://localhost:3000").replace(/\/+$/, "");
 
@@ -34,15 +34,33 @@ async function request<T>(path: string, init: RequestInit): Promise<T> {
   }
 }
 
+export type LoginResult = {
+  pendingToken: string;
+  user: MobileUser;
+  stores: MobileStore[];
+};
+
 export function login(username: string, pin: string) {
-  return request<{ token: string; user: MobileUser }>("/api/mobile/login", {
+  return request<LoginResult>("/api/mobile/login", {
     method: "POST",
     body: JSON.stringify({ username, pin }),
   });
 }
 
+export function selectStore(pendingToken: string, storeId: number) {
+  return request<{ token: string; user: MobileUser; store: MobileStore }>(
+    "/api/mobile/select-store",
+    {
+      method: "POST",
+      headers: { authorization: `Bearer ${pendingToken}` },
+      body: JSON.stringify({ storeId }),
+    },
+  );
+}
+
 export type SyncResponse = Snapshot & {
   user: MobileUser;
+  store: MobileStore;
   results: SyncResult[];
 };
 

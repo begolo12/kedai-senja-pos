@@ -6,7 +6,8 @@ import {
   orderItems,
   orders,
   products,
-  settings,
+  stores,
+  userStores,
   users,
 } from "./schema";
 import { hashPin } from "../pin";
@@ -79,13 +80,32 @@ function lcg(seed: number) {
   };
 }
 
-/** Demo cafe for an empty database. Run once from `pnpm db:setup`. */
+const SEED_STORES = [
+  {
+    code: "kemang",
+    name: "Warkop Senja — Kemang",
+    address: "Jl. Kemang Selatan No. 18, Jakarta Selatan",
+    phone: "021 719 2288",
+  },
+  {
+    code: "tebet",
+    name: "Warkop Senja — Tebet",
+    address: "Jl. Tebet Timur Dalam No. 7, Jakarta Selatan",
+    phone: "021 829 4411",
+  },
+];
+
+/** Demo warkop for an empty database. Run once from `pnpm db:setup`. */
 export async function seedIfEmpty(db: DB) {
   const existing = await db.select({ id: users.id }).from(users).limit(1);
   if (existing.length > 0) return;
 
-  const adminPin = process.env.SEED_ADMIN_PIN ?? (process.env.NODE_ENV === "production" ? "" : "1234");
-  const cashierPin = process.env.SEED_CASHIER_PIN ?? (process.env.NODE_ENV === "production" ? "" : "5678");
+  const adminPin =
+    process.env.SEED_ADMIN_PIN ??
+    (process.env.NODE_ENV === "production" ? "" : "1234");
+  const cashierPin =
+    process.env.SEED_CASHIER_PIN ??
+    (process.env.NODE_ENV === "production" ? "" : "5678");
   if (!/^\d{4,8}$/.test(adminPin) || !/^\d{4,8}$/.test(cashierPin)) {
     throw new Error(
       "SEED_ADMIN_PIN dan SEED_CASHIER_PIN wajib (4–8 digit) sebelum seed production.",
@@ -93,22 +113,24 @@ export async function seedIfEmpty(db: DB) {
   }
 
   await db.transaction(async (tx) => {
-    // Prevent two setup jobs from seeding at the same time.
     await tx.execute(sql`select pg_advisory_xact_lock(918273645)`);
     const again = await tx.select({ id: users.id }).from(users).limit(1);
     if (again.length > 0) return;
 
-    await tx.insert(settings).values({
-      id: 1,
-      storeName: "Kedai Senja",
-      address: "Jl. Cikajang No. 14, Kebayoran Baru, Jakarta Selatan",
-      phone: "021 7279 4410",
-      currency: "IDR",
-      taxRate: 1100,
-      receiptFooter: "Terima kasih. Sampai jumpa di senja berikutnya.",
-      receiptWidth: "80",
-      pointsPerAmount: 1_000_000,
-    });
+    const storeRows = await tx
+      .insert(stores)
+      .values(
+        SEED_STORES.map((store) => ({
+          ...store,
+          currency: "IDR",
+          taxRate: 1100,
+          receiptWidth: "80" as const,
+          receiptFooter: "Terima kasih. Sampai jumpa di senja berikutnya.",
+          pointsPerAmount: 1_000_000,
+          active: true,
+        })),
+      )
+      .returning({ id: stores.id, code: stores.code });
 
     const staff = await tx
       .insert(users)
@@ -129,129 +151,161 @@ export async function seedIfEmpty(db: DB) {
       .returning({ id: users.id, role: users.role });
 
     const admin = staff.find((user) => user.role === "admin")!;
+    const cashier = staff.find((user) => user.role === "cashier")!;
 
-    const catRows = await tx
-      .insert(categories)
-      .values(SEED_CATEGORIES)
-      .returning({ id: categories.id, name: categories.name });
-    const catId = new Map(catRows.map((c) => [c.name, c.id]));
+    // Kasir hanya ditugaskan ke Kemang; manajemen bisa membuka semua toko.
+    await tx.insert(userStores).values({
+      userId: cashier.id,
+      storeId: storeRows[0].id,
+    });
 
-    const productRows = await tx
-      .insert(products)
-      .values(
-        SEED_PRODUCTS.map((p) => ({
-          sku: p.sku,
-          barcode: p.barcode,
-          name: p.name,
-          categoryId: catId.get(p.category) ?? null,
-          price: p.price,
-          cost: p.cost,
-          stock: p.stock,
-          lowStockAt: p.lowStockAt ?? 5,
-          unit: p.unit ?? "pcs",
-          options: p.options ?? null,
-        })),
-      )
-      .returning({
-        id: products.id,
-        name: products.name,
-        sku: products.sku,
-        price: products.price,
-        cost: products.cost,
-      });
-
-    const customerRows = await tx
-      .insert(customers)
-      .values(SEED_CUSTOMERS)
-      .returning({ id: customers.id, name: customers.name });
-
-    // 14 days of believable sales so reports and the dashboard have signal.
-    const rnd = lcg(20261027);
-    const dayCount = new Map<string, number>();
-    const nowMs = Date.now();
-
-    for (let day = 13; day >= 0; day--) {
-      const weekday = new Date(nowMs - day * 86_400_000).getDay();
-      const weekendBoost = weekday === 0 || weekday === 6 ? 7 : 3;
-      const ordersToday = weekendBoost + Math.floor(rnd() * 5);
-
-      for (let i = 0; i < ordersToday; i++) {
-        const when = new Date(
-          nowMs - day * 86_400_000 - Math.floor(rnd() * 9 * 3_600_000) - 3_600_000,
-        );
-        const dateKey = new Intl.DateTimeFormat("en-CA", {
-          timeZone: "Asia/Jakarta",
-        }).format(when);
-        const seq = (dayCount.get(dateKey) ?? 0) + 1;
-        dayCount.set(dateKey, seq);
-
-        const lineCount = 1 + Math.floor(rnd() * 3);
-        const picked: typeof productRows = [];
-        for (let j = 0; j < lineCount; j++) {
-          const p = productRows[Math.floor(rnd() * productRows.length)];
-          if (!picked.some((x) => x.id === p.id)) picked.push(p);
-        }
-        const lines = picked.map((p) => ({
-          ...p,
-          qty: 1 + Math.floor(rnd() * 2),
-        }));
-        const totals = computeTotals(
-          lines.map((l) => ({ unitPrice: l.price, qty: l.qty })),
-          { taxRate: 1100 },
-        );
-        const method = rnd() < 0.42 ? "cash" : rnd() < 0.75 ? "qris" : "card";
-        const paid =
-          method === "cash"
-            ? Math.ceil(totals.total / 5000000) * 5000000
-            : totals.total;
-        const customer =
-          rnd() < 0.45
-            ? customerRows[Math.floor(rnd() * customerRows.length)]
-            : null;
-        const pointsEarned = customer
-          ? Math.floor(totals.total / 1_000_000)
-          : 0;
-
-        const [order] = await tx
-          .insert(orders)
-          .values({
-            number: orderNumber(when, seq),
-            clientId: `seed-${dateKey}-${seq}`,
-            userId: admin.id,
-            customerId: customer?.id ?? null,
-            subtotal: totals.subtotal,
-            taxAmount: totals.taxAmount,
-            total: totals.total,
-            costTotal: lines.reduce((s, l) => s + l.cost * l.qty, 0),
-            pointsEarned,
-            paymentMethod: method,
-            amountPaid: paid,
-            changeDue: paid - totals.total,
-            createdAt: when,
-          })
-          .returning({ id: orders.id });
-
-        await tx.insert(orderItems).values(
-          lines.map((l) => ({
-            orderId: order.id,
-            productId: l.id,
-            name: l.name,
-            sku: l.sku,
-            unitPrice: l.price,
-            cost: l.cost,
-            qty: l.qty,
-            lineTotal: l.price * l.qty,
+    for (const [storeIndex, store] of storeRows.entries()) {
+      const catRows = await tx
+        .insert(categories)
+        .values(
+          SEED_CATEGORIES.map((category) => ({
+            ...category,
+            storeId: store.id,
           })),
-        );
+        )
+        .returning({ id: categories.id, name: categories.name });
+      const catId = new Map(catRows.map((c) => [c.name, c.id]));
 
-        if (customer) {
-          await tx
-            .update(customers)
-            .set({
-              points: sql`${customers.points} + ${pointsEarned}`,
-              totalSpent: sql`${customers.totalSpent} + ${totals.total}`,
+      const productRows = await tx
+        .insert(products)
+        .values(
+          SEED_PRODUCTS.map((product) => ({
+            storeId: store.id,
+            sku: product.sku,
+            barcode: product.barcode,
+            name: product.name,
+            categoryId: catId.get(product.category) ?? null,
+            price: product.price,
+            cost: product.cost,
+            stock: product.stock,
+            lowStockAt: product.lowStockAt ?? 5,
+            unit: product.unit ?? "pcs",
+            options: product.options ?? null,
+          })),
+        )
+        .returning({
+          id: products.id,
+          name: products.name,
+          sku: products.sku,
+          price: products.price,
+          cost: products.cost,
+        });
+
+      const customerRows = await tx
+        .insert(customers)
+        .values(
+          SEED_CUSTOMERS.map((customer) => ({
+            ...customer,
+            storeId: store.id,
+          })),
+        )
+        .returning({ id: customers.id, name: customers.name });
+
+      const rnd = lcg(20261027 + storeIndex * 977);
+      const dayCount = new Map<string, number>();
+      const nowMs = Date.now();
+
+      for (let day = 13; day >= 0; day--) {
+        const weekday = new Date(nowMs - day * 86_400_000).getDay();
+        const weekendBoost = weekday === 0 || weekday === 6 ? 7 : 3;
+        const ordersToday = weekendBoost + Math.floor(rnd() * 5);
+
+        for (let i = 0; i < ordersToday; i++) {
+          const when = new Date(
+            nowMs -
+              day * 86_400_000 -
+              Math.floor(rnd() * 9 * 3_600_000) -
+              3_600_000,
+          );
+          const dateKey = new Intl.DateTimeFormat("en-CA", {
+            timeZone: "Asia/Jakarta",
+          }).format(when);
+          const seq = (dayCount.get(dateKey) ?? 0) + 1;
+          dayCount.set(dateKey, seq);
+
+          const lineCount = 1 + Math.floor(rnd() * 3);
+          const picked: typeof productRows = [];
+          for (let j = 0; j < lineCount; j++) {
+            const product =
+              productRows[Math.floor(rnd() * productRows.length)];
+            if (!picked.some((item) => item.id === product.id)) {
+              picked.push(product);
+            }
+          }
+          const lines = picked.map((product) => ({
+            ...product,
+            qty: 1 + Math.floor(rnd() * 2),
+          }));
+          const totals = computeTotals(
+            lines.map((line) => ({ unitPrice: line.price, qty: line.qty })),
+            { taxRate: 1100 },
+          );
+          const method = rnd() < 0.42 ? "cash" : rnd() < 0.75 ? "qris" : "card";
+          const paid =
+            method === "cash"
+              ? Math.ceil(totals.total / 5000000) * 5000000
+              : totals.total;
+          const customer =
+            rnd() < 0.45
+              ? customerRows[Math.floor(rnd() * customerRows.length)]
+              : null;
+          const pointsEarned = customer
+            ? Math.floor(totals.total / 1_000_000)
+            : 0;
+          const orderType = rnd() < 0.7 ? "dine_in" : "takeaway";
+
+          const [order] = await tx
+            .insert(orders)
+            .values({
+              storeId: store.id,
+              number: orderNumber(when, seq),
+              clientId: `seed-${store.code}-${dateKey}-${seq}`,
+              userId: admin.id,
+              customerId: customer?.id ?? null,
+              subtotal: totals.subtotal,
+              taxAmount: totals.taxAmount,
+              total: totals.total,
+              costTotal: lines.reduce((sum, line) => sum + line.cost * line.qty, 0),
+              pointsEarned,
+              orderType,
+              tableLabel:
+                orderType === "dine_in"
+                  ? `Meja ${1 + Math.floor(rnd() * 8)}`
+                  : null,
+              paymentMethod: method,
+              amountPaid: paid,
+              changeDue: paid - totals.total,
+              createdAt: when,
             })
-            .where(sql`${customers.id} = ${customer.id}`);
+            .returning({ id: orders.id });
+
+          await tx.insert(orderItems).values(
+            lines.map((line) => ({
+              orderId: order.id,
+              productId: line.id,
+              name: line.name,
+              sku: line.sku,
+              unitPrice: line.price,
+              cost: line.cost,
+              qty: line.qty,
+              lineTotal: line.price * line.qty,
+            })),
+          );
+
+          if (customer) {
+            await tx
+              .update(customers)
+              .set({
+                points: sql`${customers.points} + ${pointsEarned}`,
+                totalSpent: sql`${customers.totalSpent} + ${totals.total}`,
+              })
+              .where(sql`${customers.id} = ${customer.id}`);
+          }
         }
       }
     }

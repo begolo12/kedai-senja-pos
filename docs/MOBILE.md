@@ -5,7 +5,8 @@ GitHub Actions dan dipublikasikan sebagai GitHub Release.
 
 ## Fitur
 
-- Login username + PIN (butuh internet pada login pertama).
+- Login ID + PIN, lalu pilih toko (butuh internet pada login pertama).
+  Data lokal dipisah per toko; pindah toko membersihkan cache toko lama.
 - Katalog, kategori, pelanggan, pengaturan tersimpan di IndexedDB tablet.
 - Jual offline: varian menu, catatan item, dine-in/bungkus + meja,
   pembayaran tunai/QRIS/kartu (gambar QRIS ikut tersinkron), struk.

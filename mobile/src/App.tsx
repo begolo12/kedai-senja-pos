@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getSetting, db, saveSnapshot, clearLocalData } from "./lib/db";
-import { ApiError, sync } from "./lib/api";
+import { getSetting, db, saveSnapshot, clearLocalData, prepareStore } from "./lib/db";
+import { ApiError, sync, type LoginResult } from "./lib/api";
 import { computeTotals, formatMoney, formatTime } from "./lib/money";
 import { printOrder } from "./lib/thermal";
 import { clearSession, readSession, writeSession, type Session } from "./lib/storage";
@@ -13,6 +13,7 @@ import type {
   Settings,
 } from "./lib/types";
 import { LoginScreen } from "./screens/LoginScreen";
+import { StorePicker } from "./screens/StorePicker";
 import { PosScreen, type CartLine } from "./screens/PosScreen";
 
 type LocalData = {
@@ -40,6 +41,7 @@ async function loadLocal(): Promise<LocalData | null> {
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
+  const [pendingLogin, setPendingLogin] = useState<LoginResult | null>(null);
   const [data, setData] = useState<LocalData | null>(null);
   const [loading, setLoading] = useState(true);
   const [online, setOnline] = useState(navigator.onLine);
@@ -91,11 +93,16 @@ export default function App() {
             current && current.clientId === result.clientId ? updated : current,
           );
         }
-        await saveSnapshot(response);
+        await saveSnapshot({ ...response, storeId: response.store.id });
         const fresh = await loadLocal();
         if (fresh) setData(fresh);
-        await writeSession({ token: current.token, user: response.user });
-        setSession({ token: current.token, user: response.user });
+        const nextSession = {
+          token: current.token,
+          user: response.user,
+          store: response.store,
+        };
+        await writeSession(nextSession);
+        setSession(nextSession);
         setExpired(false);
         await refreshCounts();
       } catch (error) {
@@ -116,6 +123,15 @@ export default function App() {
   useEffect(() => {
     async function boot() {
       const stored = await readSession();
+      if (stored) {
+        try {
+          await prepareStore(stored.store.id);
+        } catch {
+          await clearSession();
+          setLoading(false);
+          return;
+        }
+      }
       const local = await loadLocal();
       setSession(stored);
       setData(local);
@@ -278,14 +294,33 @@ export default function App() {
   }
 
   if (!session) {
-    return (
-      <LoginScreen
-        onLogin={(next) => {
-          setSession(next);
-          void syncNow(next);
-        }}
-      />
-    );
+    if (pendingLogin) {
+      return (
+        <StorePicker
+          login={pendingLogin}
+          onCancel={() => setPendingLogin(null)}
+          onSelected={(next) => {
+            void (async () => {
+              try {
+                await prepareStore(next.store.id);
+              } catch (error) {
+                setSyncError(
+                  error instanceof Error ? error.message : "Tidak bisa pindah toko.",
+                );
+                return;
+              }
+              await writeSession(next);
+              setSession(next);
+              setPendingLogin(null);
+              setData(await loadLocal());
+              await refreshCounts();
+              void syncNow(next);
+            })();
+          }}
+        />
+      );
+    }
+    return <LoginScreen onLogin={setPendingLogin} />;
   }
 
   if (!data) {
@@ -525,6 +560,7 @@ function SettingsOverlay({
             <span className="eyebrow">Akun</span>
             <strong>{session.user.name}</strong>
             <p className="hint">@{session.user.username} · {session.user.role === "admin" ? "Manajemen" : "Kasir"}</p>
+            <p className="hint">Toko: {session.store.name}</p>
           </div>
 
           <div className="setting-card">
@@ -566,7 +602,7 @@ function SettingsOverlay({
             )}
           </div>
 
-          <button className="ghost danger" onClick={onLogout}>Keluar akun</button>
+          <button className="ghost danger" onClick={onLogout}>Ganti toko / keluar</button>
         </div>
       </div>
     </div>

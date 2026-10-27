@@ -10,13 +10,13 @@ import { formatMoney } from "@/lib/money";
 export const metadata: Metadata = { title: "Pengaturan" };
 
 export default async function SettingsPage() {
-  await requireAdmin();
-  const settings = await getSettings();
+  const { store } = await requireAdmin();
+  const settings = await getSettings(store.id);
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <PageHeader
-        eyebrow="Konfigurasi"
+        eyebrow={`Konfigurasi · ${store.name}`}
         title="Pengaturan"
         description="Identitas toko, pajak, dan aturan poin. Perubahan berlaku untuk transaksi berikutnya."
         actions={

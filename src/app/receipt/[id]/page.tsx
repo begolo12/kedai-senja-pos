@@ -1,17 +1,17 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Check, RotateCcw } from "lucide-react";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { customers, orderItems, orders, users } from "@/lib/db/schema";
-import { requireUser } from "@/lib/auth";
+import { requireStore } from "@/lib/auth";
 import { getSettings } from "@/lib/settings";
 import { formatDateTime, formatMoney } from "@/lib/money";
 import { Button } from "@/components/ui/button";
 import { PrintButton } from "@/components/receipt/print-button";
 
 export default async function ReceiptPage({ params, searchParams }: PageProps<"/receipt/[id]">) {
-  const user = await requireUser();
+  const { user, store } = await requireStore();
   const { id } = await params;
   const { fresh } = await searchParams;
   const orderId = Number(id);
@@ -27,13 +27,13 @@ export default async function ReceiptPage({ params, searchParams }: PageProps<"/
     .from(orders)
     .innerJoin(users, eq(orders.userId, users.id))
     .leftJoin(customers, eq(orders.customerId, customers.id))
-    .where(eq(orders.id, orderId))
+    .where(and(eq(orders.id, orderId), eq(orders.storeId, store.id)))
     )[0];
   if (!order) notFound();
   if (user.role !== "admin" && order.order.userId !== user.id) notFound();
 
   const items = await db.select().from(orderItems).where(eq(orderItems.orderId, orderId));
-  const settings = await getSettings();
+  const settings = await getSettings(store.id);
   const isFresh = fresh === "1";
   const cashier = order.cashier;
   const paper = settings.receiptWidth === "58" ? "58" : "80";

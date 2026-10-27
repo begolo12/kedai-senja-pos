@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { asc, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { users } from "@/lib/db/schema";
+import { stores, userStores, users } from "@/lib/db/schema";
 import { requireAdmin } from "@/lib/auth";
 import { formatDate } from "@/lib/money";
 import { PageHeader } from "@/components/shared/page-header";
@@ -12,8 +12,16 @@ import { PinDialog } from "@/components/staff/pin-dialog";
 export const metadata: Metadata = { title: "Staf" };
 
 export default async function StaffPage() {
-  const me = await requireAdmin();
+  const { user: me } = await requireAdmin();
   const rows = await db.select().from(users).orderBy(asc(users.name));
+  const allStores = await db.select().from(stores).orderBy(asc(stores.name));
+  const assignments = await db.select().from(userStores);
+  const storesByUser = new Map<number, number[]>();
+  for (const assignment of assignments) {
+    const list = storesByUser.get(assignment.userId) ?? [];
+    list.push(assignment.storeId);
+    storesByUser.set(assignment.userId, list);
+  }
   const stats = (await db
     .select({
       total: sql<number>`count(*)`,
@@ -29,7 +37,7 @@ export default async function StaffPage() {
         eyebrow="Tim"
         title="Staf"
         description="Manajemen mengatur produk, akun, PIN, dan pengaturan. Kasir menjalankan transaksi dan shift."
-        actions={<StaffDialog />}
+        actions={<StaffDialog stores={allStores} />}
       />
 
       <section className="grid gap-px border border-border bg-border sm:grid-cols-3">
@@ -63,6 +71,14 @@ export default async function StaffPage() {
                 <td className="px-4 py-2.5">
                   <span className="stamp border-border text-muted-foreground">
                     {staff.role === "admin" ? "Manajemen" : "Kasir"}
+                    {staff.role === "cashier" ? (
+                      <span className="ml-1 text-[10px] text-muted-foreground">
+                        {allStores
+                          .filter((store) => storesByUser.get(staff.id)?.includes(store.id))
+                          .map((store) => store.name)
+                          .join(", ") || "belum ada toko"}
+                      </span>
+                    ) : null}
                   </span>
                 </td>
                 <td className="px-4 py-2.5 text-center">
@@ -78,15 +94,18 @@ export default async function StaffPage() {
                       username: staff.username,
                       role: staff.role,
                       active: staff.active,
+                      storeIds: storesByUser.get(staff.id) ?? [],
                     }}
                   />
                   <StaffDialog
+                    stores={allStores}
                     staff={{
                       id: staff.id,
                       name: staff.name,
                       username: staff.username,
                       role: staff.role,
                       active: staff.active,
+                      storeIds: storesByUser.get(staff.id) ?? [],
                     }}
                   />
                   </div>

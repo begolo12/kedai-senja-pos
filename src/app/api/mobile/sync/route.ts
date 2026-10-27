@@ -10,7 +10,13 @@ import {
   shifts,
   stockMovements,
 } from "@/lib/db/schema";
-import { corsHeaders, getMobileUser, json, mobileUser } from "@/lib/mobile-auth";
+import {
+  corsHeaders,
+  getMobileContext,
+  json,
+  mobileStore,
+  mobileUser,
+} from "@/lib/mobile-auth";
 import { computeTotals, orderNumber } from "@/lib/money";
 import { dayStart, DAY_MS } from "@/lib/dates";
 import { getSettings } from "@/lib/settings";
@@ -60,7 +66,7 @@ type SyncResult = {
   error?: string;
 };
 
-async function pullSnapshot() {
+async function pullSnapshot(storeId: number) {
   const [productRows, categoryRows, customerRows, settingsRow] = await Promise.all([
     db
       .select({
@@ -76,14 +82,19 @@ async function pullSnapshot() {
         options: products.options,
       })
       .from(products)
-      .where(eq(products.active, true))
+      .where(and(eq(products.storeId, storeId), eq(products.active, true)))
       .orderBy(products.name),
-    db.select().from(categories).orderBy(categories.sortOrder),
+    db
+      .select()
+      .from(categories)
+      .where(eq(categories.storeId, storeId))
+      .orderBy(categories.sortOrder),
     db
       .select({ id: customers.id, name: customers.name, phone: customers.phone, points: customers.points })
       .from(customers)
+      .where(eq(customers.storeId, storeId))
       .orderBy(customers.name),
-    getSettings(),
+    getSettings(storeId),
   ]);
 
   return {
@@ -105,12 +116,19 @@ async function pullSnapshot() {
   };
 }
 
-async function pushOrder(userId: number, input: OrderInput): Promise<SyncResult> {
+async function pushOrder(
+  userId: number,
+  storeId: number,
+  input: OrderInput,
+): Promise<SyncResult> {
   const existing = await db
-    .select({ id: orders.id, number: orders.number })
+    .select({ id: orders.id, number: orders.number, storeId: orders.storeId })
     .from(orders)
     .where(eq(orders.clientId, input.clientId))
     .limit(1);
+  if (existing[0] && existing[0].storeId !== storeId) {
+    return { clientId: input.clientId, status: "rejected", error: "ID pesanan bentrok." };
+  }
   if (existing[0]) {
     return {
       clientId: input.clientId,
@@ -162,7 +180,13 @@ async function pushOrder(userId: number, input: OrderInput): Promise<SyncResult>
     const shiftRows = await tx
       .select({ id: shifts.id })
       .from(shifts)
-      .where(and(eq(shifts.userId, userId), eq(shifts.status, "open")))
+      .where(
+        and(
+          eq(shifts.userId, userId),
+          eq(shifts.storeId, storeId),
+          eq(shifts.status, "open"),
+        ),
+      )
       .limit(1);
 
     const now = new Date();
@@ -177,7 +201,10 @@ async function pushOrder(userId: number, input: OrderInput): Promise<SyncResult>
         .select({ n: sql<string>`count(*)` })
         .from(orders)
         .where(
-          sql`${orders.createdAt} >= ${new Date(start)} and ${orders.createdAt} < ${new Date(start + DAY_MS)}`,
+          and(
+            eq(orders.storeId, storeId),
+            sql`${orders.createdAt} >= ${new Date(start)} and ${orders.createdAt} < ${new Date(start + DAY_MS)}`,
+          ),
         )
     )[0]?.n;
 
@@ -186,14 +213,14 @@ async function pushOrder(userId: number, input: OrderInput): Promise<SyncResult>
       const found = await tx
         .select({ id: products.id })
         .from(products)
-        .where(eq(products.id, item.productId))
+        .where(and(eq(products.id, item.productId), eq(products.storeId, storeId)))
         .for("update");
       if (found[0]) {
         knownProducts.add(item.productId);
         await tx
           .update(products)
           .set({ stock: sql`${products.stock} - ${item.qty}`, updatedAt: now })
-          .where(eq(products.id, item.productId));
+          .where(and(eq(products.id, item.productId), eq(products.storeId, storeId)));
       }
     }
 
@@ -202,6 +229,7 @@ async function pushOrder(userId: number, input: OrderInput): Promise<SyncResult>
       .values({
         number: orderNumber(createdAt, Number(countToday ?? 0) + 1),
         clientId: input.clientId,
+        storeId,
         shiftId: shiftRows[0]?.id ?? null,
         userId,
         subtotal: input.subtotal,
@@ -239,6 +267,7 @@ async function pushOrder(userId: number, input: OrderInput): Promise<SyncResult>
     for (const item of input.items) {
       if (!knownProducts.has(item.productId)) continue;
       await tx.insert(stockMovements).values({
+        storeId,
         productId: item.productId,
         delta: -item.qty,
         reason: "sale",
@@ -266,14 +295,18 @@ export async function OPTIONS(request: Request) {
 }
 
 export async function GET(request: Request) {
-  const user = await getMobileUser(request);
-  if (!user) return json(request, { error: "Unauthorized" }, 401);
-  return json(request, { user: mobileUser(user), ...(await pullSnapshot()) });
+  const context = await getMobileContext(request);
+  if (!context) return json(request, { error: "Unauthorized" }, 401);
+  return json(request, {
+    user: mobileUser(context.user),
+    store: mobileStore(context.store),
+    ...(await pullSnapshot(context.store.id)),
+  });
 }
 
 export async function POST(request: Request) {
-  const user = await getMobileUser(request);
-  if (!user) return json(request, { error: "Unauthorized" }, 401);
+  const context = await getMobileContext(request);
+  if (!context) return json(request, { error: "Unauthorized" }, 401);
 
   const parsed = payloadSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
@@ -283,7 +316,7 @@ export async function POST(request: Request) {
   const results: SyncResult[] = [];
   for (const order of parsed.data.orders) {
     try {
-      results.push(await pushOrder(user.id, order));
+      results.push(await pushOrder(context.user.id, context.store.id, order));
     } catch (error) {
       results.push({
         clientId: order.clientId,
@@ -294,8 +327,9 @@ export async function POST(request: Request) {
   }
 
   return json(request, {
-    user: mobileUser(user),
+    user: mobileUser(context.user),
+    store: mobileStore(context.store),
     results,
-    ...(await pullSnapshot()),
+    ...(await pullSnapshot(context.store.id)),
   });
 }

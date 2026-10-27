@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Printer, UserRound } from "lucide-react";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { customers, orderItems, orders, shifts, users } from "@/lib/db/schema";
 import { requireAdmin } from "@/lib/auth";
@@ -12,7 +12,7 @@ import { PageHeader, SectionLabel } from "@/components/shared/page-header";
 import { RefundButton } from "@/components/orders/refund-button";
 
 export default async function OrderDetailPage({ params }: PageProps<"/orders/[id]">) {
-  const user = await requireAdmin();
+  const { user, store } = await requireAdmin();
   const { id } = await params;
   const orderId = Number(id);
   if (!Number.isInteger(orderId) || orderId <= 0) notFound();
@@ -29,12 +29,12 @@ export default async function OrderDetailPage({ params }: PageProps<"/orders/[id
     .innerJoin(users, eq(orders.userId, users.id))
     .leftJoin(customers, eq(orders.customerId, customers.id))
     .leftJoin(shifts, eq(orders.shiftId, shifts.id))
-    .where(eq(orders.id, orderId))
+    .where(and(eq(orders.id, orderId), eq(orders.storeId, store.id)))
     )[0];
   if (!row) notFound();
 
   const items = await db.select().from(orderItems).where(eq(orderItems.orderId, orderId));
-  const settings = await getSettings();
+  const settings = await getSettings(store.id);
   const order = row.order;
   const refunder = order.refundedBy
     ? (await db

@@ -1,8 +1,7 @@
 import { useState } from "react";
-import { login } from "../lib/api";
-import { writeSession, type Session } from "../lib/storage";
+import { login, type LoginResult } from "../lib/api";
 
-export function LoginScreen({ onLogin }: { onLogin: (session: Session) => void }) {
+export function LoginScreen({ onLogin }: { onLogin: (result: LoginResult) => void }) {
   const [username, setUsername] = useState("");
   const [pin, setPin] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -14,7 +13,6 @@ export function LoginScreen({ onLogin }: { onLogin: (session: Session) => void }
     setError(null);
     try {
       const result = await login(username.trim().toLowerCase(), pin);
-      await writeSession(result);
       onLogin(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Tidak bisa masuk.");

@@ -1,22 +1,43 @@
 import { cache } from "react";
+import { eq } from "drizzle-orm";
 import { db } from "./db";
-import { settings, type Settings } from "./db/schema";
+import { stores } from "./db/schema";
 
-const FALLBACK: Settings = {
-  id: 1,
-  storeName: "Kedai Senja",
-  address: "",
-  phone: "",
-  currency: "IDR",
-  taxRate: 1100,
-  receiptFooter: "Terima kasih.",
-  receiptWidth: "80",
-  qrisPayload: "",
-  pointsPerAmount: 1_000_000,
-  updatedAt: new Date(),
+export type StoreSettings = {
+  id: number;
+  storeName: string;
+  address: string;
+  phone: string;
+  currency: string;
+  taxRate: number;
+  receiptFooter: string;
+  receiptWidth: "58" | "80";
+  qrisPayload: string;
+  pointsPerAmount: number;
+  updatedAt: Date;
 };
 
-export const getSettings = cache(async (): Promise<Settings> => {
-  const found = await db.select().from(settings).limit(1);
-  return found[0] ?? FALLBACK;
+export const getSettings = cache(async (storeId: number): Promise<StoreSettings> => {
+  const found = await db
+    .select()
+    .from(stores)
+    .where(eq(stores.id, storeId))
+    .limit(1);
+  const store = found[0];
+  if (!store) {
+    throw new Error("Toko tidak ditemukan.");
+  }
+  return {
+    id: store.id,
+    storeName: store.name,
+    address: store.address,
+    phone: store.phone,
+    currency: store.currency,
+    taxRate: store.taxRate,
+    receiptFooter: store.receiptFooter,
+    receiptWidth: store.receiptWidth,
+    qrisPayload: store.qrisPayload,
+    pointsPerAmount: store.pointsPerAmount,
+    updatedAt: store.createdAt,
+  };
 });

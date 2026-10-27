@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { desc, eq, like, or, sql } from "drizzle-orm";
+import { and, desc, eq, like, or, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { products, stockMovements, users } from "@/lib/db/schema";
 import { requireAdmin } from "@/lib/auth";
@@ -21,14 +21,15 @@ const REASON_LABEL: Record<string, string> = {
 };
 
 export default async function InventoryPage({ searchParams }: PageProps<"/inventory">) {
-  const user = await requireAdmin();
+  const { user, store } = await requireAdmin();
   const params = await searchParams;
   const q = typeof params.q === "string" ? params.q.trim() : "";
-  const settings = await getSettings();
+  const settings = await getSettings(store.id);
 
-  const filters = q
-    ? or(like(products.name, `%${q}%`), like(products.sku, `%${q}%`))
-    : undefined;
+  const filters = and(
+    eq(products.storeId, store.id),
+    q ? or(like(products.name, `%${q}%`), like(products.sku, `%${q}%`)) : undefined,
+  );
 
   const rows = await db
     .select()
@@ -44,6 +45,7 @@ export default async function InventoryPage({ searchParams }: PageProps<"/invent
       value: sql<number>`coalesce(sum(${products.stock} * ${products.cost}), 0)`,
     })
     .from(products)
+    .where(eq(products.storeId, store.id))
     )[0]!;
 
   const movements = await db
@@ -56,6 +58,7 @@ export default async function InventoryPage({ searchParams }: PageProps<"/invent
     .from(stockMovements)
     .innerJoin(products, eq(stockMovements.productId, products.id))
     .leftJoin(users, eq(stockMovements.userId, users.id))
+    .where(eq(stockMovements.storeId, store.id))
     .orderBy(desc(stockMovements.createdAt))
     .limit(40);
 

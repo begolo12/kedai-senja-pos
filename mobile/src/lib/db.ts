@@ -38,6 +38,7 @@ export async function saveSnapshot(snapshot: {
   products: Product[];
   customers: Customer[];
   serverTime: string;
+  storeId: number;
 }) {
   await db.transaction("rw", db.settings, db.categories, db.products, db.customers, db.meta, async () => {
     await Promise.all([
@@ -51,7 +52,24 @@ export async function saveSnapshot(snapshot: {
     await db.products.bulkPut(snapshot.products);
     await db.customers.bulkPut(snapshot.customers);
     await db.meta.put({ key: "lastSync", value: snapshot.serverTime });
+    await db.meta.put({ key: "storeId", value: String(snapshot.storeId) });
   });
+}
+
+/** Switching stores must never mix catalogs or pending orders. */
+export async function prepareStore(storeId: number) {
+  const meta = await db.meta.get("storeId");
+  if (meta?.value === String(storeId)) return;
+  const pending = await db.orders.where("status").equals("pending").count();
+  if (pending > 0) {
+    throw new Error("Sinkronkan pesanan offline dulu sebelum pindah toko.");
+  }
+  await db.products.clear();
+  await db.categories.clear();
+  await db.customers.clear();
+  await db.settings.clear();
+  await db.orders.clear();
+  await db.meta.put({ key: "storeId", value: String(storeId) });
 }
 
 export async function clearLocalData() {

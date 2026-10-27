@@ -20,7 +20,7 @@ const STATUS = [
 ] as const;
 
 export default async function OrdersPage({ searchParams }: PageProps<"/orders">) {
-  await requireAdmin();
+  const { store } = await requireAdmin();
   const params = await searchParams;
   const q = typeof params.q === "string" ? params.q.trim() : "";
   const status = typeof params.status === "string" ? params.status : "all";
@@ -28,13 +28,14 @@ export default async function OrdersPage({ searchParams }: PageProps<"/orders">)
     typeof params.from === "string" && typeof params.to === "string"
       ? readDateRange({ from: params.from, to: params.to })
       : readDateRange({ range: "7d" });
-  const settings = await getSettings();
+  const settings = await getSettings(store.id);
 
   const from = new Date(`${range.from}T00:00:00+07:00`);
   const to = new Date(`${range.to}T00:00:00+07:00`);
   to.setDate(to.getDate() + 1);
 
   const filters = [
+    eq(orders.storeId, store.id),
     gte(orders.createdAt, from),
     lt(orders.createdAt, to),
     status === "completed" || status === "refunded" ? eq(orders.status, status) : undefined,
