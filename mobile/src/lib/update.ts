@@ -47,16 +47,6 @@ export async function checkForUpdate(): Promise<UpdateInfo | null> {
   };
 }
 
-function toBase64(buffer: ArrayBuffer) {
-  const bytes = new Uint8Array(buffer);
-  let binary = "";
-  const chunk = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunk) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
-  }
-  return btoa(binary);
-}
-
 export async function downloadAndInstall(
   update: UpdateInfo,
   onProgress?: (percent: number) => void,
@@ -66,44 +56,21 @@ export async function downloadAndInstall(
     return;
   }
 
-  onProgress?.(0);
-  const response = await fetch(update.url);
-  if (!response.ok) throw new Error("Unduhan gagal.");
-  const total = Number(response.headers.get("content-length") ?? update.size);
-  const reader = response.body?.getReader();
-  if (!reader) throw new Error("Perangkat tidak mendukung unduhan.");
-
-  const chunks: Uint8Array[] = [];
-  let received = 0;
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    if (value) {
-      chunks.push(value);
-      received += value.length;
-      onProgress?.(total ? Math.round((received / total) * 95) : 50);
-    }
-  }
-
-  const merged = new Uint8Array(received);
-  let offset = 0;
-  for (const chunk of chunks) {
-    merged.set(chunk, offset);
-    offset += chunk.length;
-  }
-
-  const written = await Filesystem.writeFile({
+  onProgress?.(10);
+  // Native download avoids WebView CORS and keeps large APKs out of JS memory.
+  await Filesystem.downloadFile({
+    url: update.url,
     path: update.fileName,
-    data: toBase64(merged.buffer),
     directory: Directory.Cache,
   });
+  onProgress?.(95);
   const uri = await Filesystem.getUri({
     path: update.fileName,
     directory: Directory.Cache,
   });
   onProgress?.(100);
   await FileOpener.open({
-    filePath: uri.uri || written.uri,
+    filePath: uri.uri,
     contentType: "application/vnd.android.package-archive",
   });
 }
