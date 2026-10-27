@@ -38,7 +38,7 @@ export function LoginScreen({ onLogin }: { onLogin: (session: Session) => void }
         <span className="eyebrow">Masuk</span>
         <h2>Selamat datang</h2>
         <label>
-          Username
+          ID Login
           <input
             value={username}
             onChange={(event) => setUsername(event.target.value)}
