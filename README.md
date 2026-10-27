@@ -1,7 +1,8 @@
 # Kedai Senja POS
 
-POS untuk kedai: kasir web, aplikasi Android offline-first, stok, shift,
-pelanggan, laporan, dan struk thermal 58/80 mm.
+POS warkop/kedai: ricebowl, sushi, minuman bubuk, camilan. Kasir web,
+aplikasi Android offline-first, varian menu, tipe dine-in/bungkus, meja,
+QRIS, stok, shift, laporan, dan struk thermal 58/80 mm.
 
 - Web production: https://kedai-senja-pos.vercel.app
 - Repo: https://github.com/begolo12/kedai-senja-pos (publik)
@@ -27,6 +28,9 @@ pnpm dev
 
 `pnpm dev` menjalankan PGlite (Postgres lokal, port 5433), migrasi, seed,
 lalu Next.js. Buka http://localhost:3000.
+
+Seed lokal berisi menu warkop (ricebowl, sushi, minuman bubuk, camilan,
+tambahan) dengan varian seperti level pedas/less sugar.
 
 Akun development (database lokal kosong):
 
@@ -70,6 +74,18 @@ DATABASE_URL="..." SEED_ADMIN_PIN="..." SEED_CASHIER_PIN="..." NODE_ENV=producti
 
 Neon/Vercel menyediakan `DATABASE_URL` lewat integrasi. Jangan commit nilai
 apa pun; `.env.local` sudah di-ignore.
+
+## Alur FnB
+
+- Pilih produk → varian muncul otomatis (mis. Level 1–5, Less sugar).
+- Tipe **Dine-in** + nomor meja atau **Bungkus**.
+- Catatan per item (mis. tanpa timun) ikut tercetak.
+- Diskon, pajak, tunai/QRIS/kartu.
+- QRIS: unggah gambar QRIS merchant di Pengaturan; tampil otomatis di layar bayar.
+- **Impor menu** dari tempelan Excel/CSV; kategori dibuat otomatis, produk
+  dengan nama sama diperbarui.
+- Tablet: alur sama, tetap jalan offline; sinkron membawa varian, catatan,
+  tipe order, dan meja.
 
 ## Role
 

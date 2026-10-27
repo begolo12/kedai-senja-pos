@@ -1,0 +1,44 @@
+name: Database setup
+
+on:
+  workflow_dispatch:
+    inputs:
+      reset:
+        description: "Hapus semua data lalu seed ulang"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.11.2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Reset schema
+        if: ${{ inputs.reset }}
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          CONFIRM_RESET: YES
+        run: pnpm tsx scripts/reset-db.ts
+
+      - name: Migrate and seed
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          NODE_ENV: production
+          SEED_ADMIN_PIN: ${{ secrets.SEED_ADMIN_PIN }}
+          SEED_CASHIER_PIN: ${{ secrets.SEED_CASHIER_PIN }}
+        run: pnpm db:setup

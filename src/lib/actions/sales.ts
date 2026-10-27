@@ -54,27 +54,37 @@ export async function checkoutAction(input: unknown): Promise<CheckoutResult> {
     const shift = openShifts[0];
     if (!shift) return { ok: false as const, error: "Buka shift dulu sebelum transaksi." };
 
-    const merged = new Map<number, number>();
+    const merged = new Map<string, { productId: number; qty: number; note: string }>();
     for (const item of data.items) {
-      merged.set(item.productId, (merged.get(item.productId) ?? 0) + item.qty);
+      const note = item.note?.trim() ?? "";
+      const key = `${item.productId}::${note}`;
+      const existing = merged.get(key);
+      merged.set(key, {
+        productId: item.productId,
+        qty: (existing?.qty ?? 0) + item.qty,
+        note,
+      });
     }
 
     const rows = [];
-    for (const [productId, qty] of merged) {
+    for (const { productId, qty, note } of merged.values()) {
       const found = await tx
         .select()
         .from(products)
         .where(eq(products.id, productId))
         .for("update");
-      rows.push({ product: found[0], qty });
+      rows.push({ product: found[0], qty, note });
     }
 
+    const requested = new Map<number, number>();
     for (const row of rows) {
       if (!row.product) return { ok: false as const, error: "Produk tidak ditemukan." };
       if (!row.product.active) {
         return { ok: false as const, error: `${row.product.name} sedang tidak dijual.` };
       }
-      if (row.product.stock < row.qty) {
+      const total = (requested.get(row.product.id) ?? 0) + row.qty;
+      requested.set(row.product.id, total);
+      if (row.product.stock < total) {
         return {
           ok: false as const,
           error: `Stok ${row.product.name} tinggal ${row.product.stock}.`,
@@ -82,9 +92,10 @@ export async function checkoutAction(input: unknown): Promise<CheckoutResult> {
       }
     }
 
-    const lines = rows.map(({ product, qty }) => ({
+    const lines = rows.map(({ product, qty, note }) => ({
       product: product!,
       qty,
+      note,
       lineTotal: product!.price * qty,
     }));
     const config = (
@@ -147,6 +158,8 @@ export async function checkoutAction(input: unknown): Promise<CheckoutResult> {
         total: totals.total,
         costTotal: lines.reduce((s, l) => s + l.product.cost * l.qty, 0),
         pointsEarned,
+        orderType: data.orderType,
+        tableLabel: data.tableLabel || null,
         paymentMethod: data.paymentMethod,
         amountPaid,
         changeDue,
@@ -164,6 +177,7 @@ export async function checkoutAction(input: unknown): Promise<CheckoutResult> {
         unitPrice: l.product.price,
         cost: l.product.cost,
         qty: l.qty,
+        note: l.note || null,
         lineTotal: l.lineTotal,
       })),
     );

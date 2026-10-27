@@ -30,6 +30,7 @@ export type ProductFormValues = {
   stock: number;
   lowStockAt: number;
   unit: string;
+  options: string;
   active: boolean;
 };
 
@@ -43,6 +44,7 @@ const BLANK: ProductFormValues = {
   stock: 0,
   lowStockAt: 5,
   unit: "pcs",
+  options: "",
   active: true,
 };
 
@@ -81,6 +83,7 @@ export function ProductDialog({
         stock: values.stock,
         lowStockAt: values.lowStockAt,
         unit: values.unit,
+        options: values.options,
         active: values.active,
       });
       if (!result.ok) {
@@ -193,6 +196,14 @@ export function ProductDialog({
             </Field>
             <Field label="Satuan" htmlFor="p-unit">
               <Input id="p-unit" value={values.unit} onChange={(e) => field("unit", e.target.value)} />
+            </Field>
+            <Field label="Pilihan (pisahkan koma)" htmlFor="p-options">
+              <Input
+                id="p-options"
+                value={values.options}
+                onChange={(e) => field("options", e.target.value)}
+                placeholder="mis. Level 1,Level 2,Level 3"
+              />
             </Field>
             <label className="flex items-center gap-2 pt-5 text-sm">
               <Checkbox checked={values.active} onCheckedChange={(checked) => field("active", Boolean(checked))} />

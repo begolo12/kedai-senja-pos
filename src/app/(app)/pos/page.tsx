@@ -45,6 +45,7 @@ export default async function PosPage() {
       price: products.price,
       stock: products.stock,
       unit: products.unit,
+      options: products.options,
       categoryId: products.categoryId,
       categoryName: categories.name,
       categoryColor: categories.color,
@@ -79,6 +80,7 @@ export default async function PosPage() {
         customers={customerList}
         currency={settings.currency}
         taxRate={settings.taxRate}
+        qrisPayload={settings.qrisPayload}
       />
     </div>
   );

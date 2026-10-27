@@ -19,6 +19,7 @@ export type SettingsValues = {
   taxRate: number;
   receiptFooter: string;
   receiptWidth: "58" | "80";
+  qrisPayload: string;
   pointsPerAmount: number;
 };
 
@@ -46,6 +47,7 @@ export function SettingsForm({ settings }: { settings: SettingsValues }) {
         taxRate: Math.round(Number(tax.replace(",", ".")) * 100) || 0,
         receiptFooter: values.receiptFooter,
         receiptWidth: values.receiptWidth,
+        qrisPayload: values.qrisPayload,
         pointsPerAmount: parseMoneyInput(points),
       });
       if (!result.ok) {
@@ -117,6 +119,45 @@ export function SettingsForm({ settings }: { settings: SettingsValues }) {
             <option value="58">58 mm (struk kecil)</option>
             <option value="80">80 mm (standar)</option>
           </select>
+        </div>
+        <div className="space-y-1.5 sm:col-span-2">
+          <Label htmlFor="qris" className="text-[10px] tracking-[0.12em] text-muted-foreground uppercase">
+            QRIS merchant
+          </Label>
+          <div className="flex flex-wrap items-center gap-2">
+            <Input
+              id="qris"
+              type="file"
+              accept="image/png,image/jpeg"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (!file) return;
+                if (file.size > 300_000) {
+                  setError("Gambar QRIS maksimal 300 KB.");
+                  return;
+                }
+                const reader = new FileReader();
+                reader.onload = () => set("qrisPayload", String(reader.result ?? ""));
+                reader.readAsDataURL(file);
+              }}
+              className="max-w-xs"
+            />
+            {values.qrisPayload ? (
+              <Button type="button" variant="outline" size="sm" onClick={() => set("qrisPayload", "")}>
+                Hapus QRIS
+              </Button>
+            ) : null}
+          </div>
+          {values.qrisPayload.startsWith("data:image") ? (
+            <img
+              src={values.qrisPayload}
+              alt="Contoh QRIS merchant"
+              className="mt-2 size-36 border border-border bg-white object-contain p-1"
+            />
+          ) : null}
+          <p className="text-[11px] text-muted-foreground">
+            Unggah gambar QRIS dari bank/e-wallet. Muncul otomatis di layar pembayaran QRIS.
+          </p>
         </div>
         <div className="space-y-1.5 sm:col-span-2">
           <Label htmlFor="footer" className="text-[10px] tracking-[0.12em] text-muted-foreground uppercase">

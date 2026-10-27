@@ -11,6 +11,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { ProductDialog } from "@/components/products/product-dialog";
 import { CategoryManager } from "@/components/products/category-manager";
 import { ProductToggle } from "@/components/products/product-toggle";
+import { ImportMenuDialog } from "@/components/products/import-menu-dialog";
 
 export const metadata: Metadata = { title: "Produk" };
 
@@ -63,6 +64,7 @@ export default async function ProductsPage({ searchParams }: PageProps<"/product
         description="Harga, modal, dan stok. Produk nonaktif hilang dari kasir tapi riwayatnya tetap utuh."
         actions={
           <>
+            <ImportMenuDialog />
             <CategoryManager categories={cats} />
             <ProductDialog categories={cats} />
           </>
@@ -170,6 +172,7 @@ export default async function ProductsPage({ searchParams }: PageProps<"/product
                         stock: product.stock,
                         lowStockAt: product.lowStockAt,
                         unit: product.unit,
+                        options: product.options ?? "",
                         active: product.active,
                       }}
                     />

@@ -99,6 +99,7 @@ export default async function OrderDetailPage({ params }: PageProps<"/orders/[id
                 <tr key={item.id} className="border-b border-border/70 last:border-0">
                   <td className="px-5 py-2.5">
                     <p>{item.name}</p>
+                    {item.note ? <p className="text-[11px] text-signal">{item.note}</p> : null}
                     <p className="font-mono text-[10px] text-muted-foreground">{item.sku}</p>
                   </td>
                   <td className="px-3 py-2.5 text-center font-mono text-xs">{item.qty}</td>
@@ -158,6 +159,10 @@ export default async function OrderDetailPage({ params }: PageProps<"/orders/[id
           <div className="border border-border bg-card px-5 py-4">
             <SectionLabel>Ringkasan</SectionLabel>
             <dl className="space-y-1.5 text-xs">
+              <div className="flex justify-between">
+                <dt className="text-muted-foreground">Tipe</dt>
+                <dd>{order.orderType === "takeaway" ? "Bungkus" : "Dine-in"}{order.tableLabel ? ` · ${order.tableLabel}` : ""}</dd>
+              </div>
               <div className="flex justify-between">
                 <dt className="text-muted-foreground">Metode</dt>
                 <dd className="uppercase">{order.paymentMethod}</dd>

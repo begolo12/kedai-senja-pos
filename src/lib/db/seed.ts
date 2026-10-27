@@ -22,41 +22,45 @@ type SeedProduct = {
   stock: number;
   lowStockAt?: number;
   unit?: string;
+  options?: string;
 };
 
 const SEED_CATEGORIES = [
-  { name: "Kopi", color: "#a2542a", sortOrder: 1 },
-  { name: "Non-Kopi", color: "#6b7a4f", sortOrder: 2 },
-  { name: "Dapur", color: "#8c4a3c", sortOrder: 3 },
-  { name: "Roti & Kue", color: "#b07b3a", sortOrder: 4 },
-  { name: "Biji & Kemasan", color: "#4f5b66", sortOrder: 5 },
+  { name: "Ricebowl", color: "#a2542a", sortOrder: 1 },
+  { name: "Sushi", color: "#4f5b66", sortOrder: 2 },
+  { name: "Minuman Bubuk", color: "#6b7a4f", sortOrder: 3 },
+  { name: "Camilan", color: "#b07b3a", sortOrder: 4 },
+  { name: "Tambahan", color: "#7a5c8c", sortOrder: 5 },
 ];
 
 const SEED_PRODUCTS: SeedProduct[] = [
-  { sku: "KOP-ESP", barcode: "8990001000011", name: "Espresso", category: "Kopi", price: 1800000, cost: 600000, stock: 120, unit: "shot" },
-  { sku: "KOP-AME", barcode: "8990001000028", name: "Americano", category: "Kopi", price: 2200000, cost: 700000, stock: 96, unit: "cup" },
-  { sku: "KOP-LAT", barcode: "8990001000035", name: "Caffè Latte", category: "Kopi", price: 2800000, cost: 950000, stock: 88, unit: "cup" },
-  { sku: "KOP-CAP", barcode: "8990001000042", name: "Cappuccino", category: "Kopi", price: 2800000, cost: 950000, stock: 76, unit: "cup" },
-  { sku: "KOP-MOC", barcode: "8990001000059", name: "Mocha Senja", category: "Kopi", price: 3200000, cost: 1200000, stock: 54, unit: "cup" },
-  { sku: "KOP-KOP", barcode: "8990001000066", name: "Kopi Susu Gula Aren", category: "Kopi", price: 2600000, cost: 900000, stock: 110, unit: "cup" },
-  { sku: "KOP-V60", barcode: "8990001000073", name: "V60 Single Origin", category: "Kopi", price: 3400000, cost: 1300000, stock: 40, unit: "cup" },
-  { sku: "KOP-CLD", barcode: "8990001000080", name: "Cold Brew 12 Jam", category: "Kopi", price: 3000000, cost: 1000000, stock: 32, unit: "bottle" },
-  { sku: "NKP-MAT", barcode: "8990002000010", name: "Matcha Latte", category: "Non-Kopi", price: 3000000, cost: 1150000, stock: 42, unit: "cup" },
-  { sku: "NKP-CHO", barcode: "8990002000027", name: "Cokelat Panas", category: "Non-Kopi", price: 2700000, cost: 900000, stock: 38, unit: "cup" },
-  { sku: "NKP-LEM", barcode: "8990002000034", name: "Lemon Tea", category: "Non-Kopi", price: 2000000, cost: 550000, stock: 64, unit: "glass" },
-  { sku: "NKP-TEH", barcode: "8990002000041", name: "Teh Melati", category: "Non-Kopi", price: 1500000, cost: 350000, stock: 90, unit: "glass" },
-  { sku: "NKP-SOD", barcode: "8990002000058", name: "Soda Jeruk", category: "Non-Kopi", price: 2400000, cost: 700000, stock: 24, unit: "glass" },
-  { sku: "DPR-NAS", barcode: "8990003000019", name: "Nasi Goreng Senja", category: "Dapur", price: 3800000, cost: 1700000, stock: 25, unit: "plate" },
-  { sku: "DPR-MIE", barcode: "8990003000026", name: "Mie Goreng Jawa", category: "Dapur", price: 3400000, cost: 1450000, stock: 22, unit: "plate" },
-  { sku: "DPR-AYA", barcode: "8990003000033", name: "Ayam Geprek", category: "Dapur", price: 3200000, cost: 1400000, stock: 18, unit: "plate" },
-  { sku: "DPR-TAH", barcode: "8990003000040", name: "Tahu Crispy", category: "Dapur", price: 1800000, cost: 650000, stock: 30, unit: "portion" },
-  { sku: "RTI-CRO", barcode: "8990004000018", name: "Croissant Butter", category: "Roti & Kue", price: 2400000, cost: 1000000, stock: 14, lowStockAt: 6, unit: "pcs" },
-  { sku: "RTI-BAN", barcode: "8990004000025", name: "Banana Bread", category: "Roti & Kue", price: 2200000, cost: 850000, stock: 9, lowStockAt: 5, unit: "slice" },
-  { sku: "RTI-CIN", barcode: "8990004000032", name: "Cinnamon Roll", category: "Roti & Kue", price: 2600000, cost: 1050000, stock: 4, lowStockAt: 6, unit: "pcs" },
-  { sku: "RTI-BRO", barcode: "8990004000049", name: "Brownies Fudge", category: "Roti & Kue", price: 2000000, cost: 750000, stock: 11, unit: "slice" },
-  { sku: "BJI-HOU", barcode: "8990005000017", name: "House Blend 250g", category: "Biji & Kemasan", price: 9500000, cost: 6000000, stock: 20, lowStockAt: 4, unit: "bag" },
-  { sku: "BJI-GAY", barcode: "8990005000024", name: "Gayo Aceh 250g", category: "Biji & Kemasan", price: 11000000, cost: 7000000, stock: 12, lowStockAt: 4, unit: "bag" },
-  { sku: "BJI-TUM", barcode: "8990005000031", name: "Tumbler Senja", category: "Biji & Kemasan", price: 13500000, cost: 8000000, stock: 3, lowStockAt: 5, unit: "pcs" },
+  { sku: "RCB-GEPREK", barcode: "8990001000011", name: "Ricebowl Ayam Geprek", category: "Ricebowl", price: 1800000, cost: 850000, stock: 40, unit: "porsi", options: "Level 1,Level 2,Level 3,Level 4,Level 5" },
+  { sku: "RCB-TERI", barcode: "8990001000028", name: "Ricebowl Ayam Teriyaki", category: "Ricebowl", price: 2000000, cost: 950000, stock: 35, unit: "porsi", options: "Original,Extra saus" },
+  { sku: "RCB-BEEF", barcode: "8990001000035", name: "Ricebowl Beef Blackpepper", category: "Ricebowl", price: 2400000, cost: 1200000, stock: 30, unit: "porsi", options: "Tidak pedas,Pedas" },
+  { sku: "RCB-TELUR", barcode: "8990001000042", name: "Ricebowl Telur Sambal", category: "Ricebowl", price: 1400000, cost: 600000, stock: 35, unit: "porsi", options: "Level 1,Level 2,Level 3" },
+  { sku: "RCB-KATSU", barcode: "8990001000059", name: "Ricebowl Ayam Katsu", category: "Ricebowl", price: 2100000, cost: 1000000, stock: 25, unit: "porsi", options: "Saus teriyaki,Saus mentai" },
+  { sku: "RCB-DORI", barcode: "8990001000066", name: "Ricebowl Ikan Dori", category: "Ricebowl", price: 2300000, cost: 1100000, stock: 20, unit: "porsi", options: "Sambal matah,Saus tartar" },
+  { sku: "SSH-SALMON", barcode: "8990002000010", name: "Sushi Salmon Mentai 6 pcs", category: "Sushi", price: 2500000, cost: 1400000, stock: 15, lowStockAt: 5, unit: "porsi" },
+  { sku: "SSH-TUNA", barcode: "8990002000027", name: "Sushi Tuna Mayo 6 pcs", category: "Sushi", price: 2200000, cost: 1200000, stock: 12, lowStockAt: 4, unit: "porsi" },
+  { sku: "SSH-KANI", barcode: "8990002000034", name: "Sushi Kani Mayo 6 pcs", category: "Sushi", price: 2000000, cost: 1000000, stock: 12, lowStockAt: 4, unit: "porsi" },
+  { sku: "SSH-TAMAGO", barcode: "8990002000041", name: "Sushi Tamago 6 pcs", category: "Sushi", price: 1800000, cost: 900000, stock: 10, lowStockAt: 4, unit: "porsi" },
+  { sku: "SSH-PLATTER", barcode: "8990002000058", name: "Sushi Platter 24 pcs", category: "Sushi", price: 8500000, cost: 4800000, stock: 6, lowStockAt: 3, unit: "porsi" },
+  { sku: "SSH-BAKAR", barcode: "8990002000065", name: "Sushi Bakar Mix 8 pcs", category: "Sushi", price: 3200000, cost: 1800000, stock: 8, lowStockAt: 4, unit: "porsi", options: "Original,Extra mentai" },
+  { sku: "MNM-TEH", barcode: "8990003000019", name: "Es Teh Manis", category: "Minuman Bubuk", price: 500000, cost: 150000, stock: 100, unit: "gelas", options: "Normal,Less sugar,No sugar" },
+  { sku: "MNM-JERUK", barcode: "8990003000026", name: "Es Jeruk", category: "Minuman Bubuk", price: 700000, cost: 250000, stock: 80, unit: "gelas", options: "Normal,Less sugar" },
+  { sku: "MNM-MILO", barcode: "8990003000033", name: "Milo Dingin", category: "Minuman Bubuk", price: 1000000, cost: 400000, stock: 70, unit: "gelas", options: "Normal,Extra milo" },
+  { sku: "MNM-MATCHA", barcode: "8990003000040", name: "Matcha Latte", category: "Minuman Bubuk", price: 1200000, cost: 500000, stock: 60, unit: "gelas", options: "Dingin,Panas" },
+  { sku: "MNM-RED", barcode: "8990003000057", name: "Red Velvet Latte", category: "Minuman Bubuk", price: 1200000, cost: 500000, stock: 60, unit: "gelas", options: "Dingin,Panas" },
+  { sku: "MNM-COKELAT", barcode: "8990003000064", name: "Cokelat Bubuk", category: "Minuman Bubuk", price: 1000000, cost: 400000, stock: 70, unit: "gelas", options: "Dingin,Panas" },
+  { sku: "MNM-LEMON", barcode: "8990003000071", name: "Lemon Tea", category: "Minuman Bubuk", price: 800000, cost: 300000, stock: 80, unit: "gelas", options: "Normal,Less sugar" },
+  { sku: "MNM-KOPI", barcode: "8990003000088", name: "Kopi Susu Bubuk", category: "Minuman Bubuk", price: 800000, cost: 300000, stock: 90, unit: "gelas", options: "Dingin,Panas" },
+  { sku: "MNM-BOBA", barcode: "8990003000095", name: "Boba Brown Sugar", category: "Minuman Bubuk", price: 1300000, cost: 550000, stock: 50, unit: "gelas", options: "Normal,Less sugar" },
+  { sku: "CML-KENTANG", barcode: "8990004000018", name: "Kentang Goreng", category: "Camilan", price: 1200000, cost: 500000, stock: 25, lowStockAt: 5, unit: "porsi", options: "Original,Extra saus" },
+  { sku: "CML-PISANG", barcode: "8990004000025", name: "Pisang Goreng", category: "Camilan", price: 1000000, cost: 400000, stock: 20, lowStockAt: 5, unit: "porsi" },
+  { sku: "CML-TAHU", barcode: "8990004000032", name: "Tahu Cireng", category: "Camilan", price: 800000, cost: 350000, stock: 25, lowStockAt: 5, unit: "porsi", options: "Original,Pedas" },
+  { sku: "TMB-NASI", barcode: "8990005000017", name: "Extra Nasi", category: "Tambahan", price: 300000, cost: 100000, stock: 50, unit: "porsi" },
+  { sku: "TMB-TELUR", barcode: "8990005000024", name: "Extra Telur", category: "Tambahan", price: 400000, cost: 200000, stock: 50, unit: "pcs" },
+  { sku: "TMB-SAMBAL", barcode: "8990005000031", name: "Extra Sambal", category: "Tambahan", price: 200000, cost: 50000, stock: 60, unit: "sachet" },
 ];
 
 const SEED_CUSTOMERS = [
@@ -145,6 +149,7 @@ export async function seedIfEmpty(db: DB) {
           stock: p.stock,
           lowStockAt: p.lowStockAt ?? 5,
           unit: p.unit ?? "pcs",
+          options: p.options ?? null,
         })),
       )
       .returning({

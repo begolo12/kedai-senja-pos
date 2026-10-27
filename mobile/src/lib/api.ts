@@ -65,6 +65,8 @@ export function sync(token: string, orders: PendingOrder[]) {
         paymentMethod: order.paymentMethod,
         amountPaid: order.amountPaid,
         changeDue: order.changeDue,
+        orderType: order.orderType,
+        tableLabel: order.tableLabel,
         createdAt: order.createdAt,
         note: order.note,
       })),

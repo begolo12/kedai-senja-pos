@@ -9,6 +9,7 @@ export type Settings = {
   currency: string;
   taxRate: number;
   receiptWidth: "58" | "80";
+  qrisPayload: string;
   receiptFooter: string;
   pointsPerAmount: number;
 };
@@ -25,6 +26,7 @@ export type Product = {
   cost: number;
   stock: number;
   unit: string;
+  options: string | null;
 };
 
 export type Customer = { id: number; name: string; phone: string | null; points: number };
@@ -44,6 +46,7 @@ export type OrderLine = {
   unitPrice: number;
   cost: number;
   qty: number;
+  note?: string;
 };
 
 export type PendingOrder = {
@@ -57,6 +60,8 @@ export type PendingOrder = {
   taxAmount: number;
   total: number;
   costTotal: number;
+  orderType: "dine_in" | "takeaway";
+  tableLabel?: string;
   paymentMethod: "cash" | "card" | "qris";
   amountPaid: number;
   changeDue: number;

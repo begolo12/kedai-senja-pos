@@ -46,6 +46,7 @@ export const products = pgTable(
     stock: integer("stock").notNull().default(0),
     lowStockAt: integer("low_stock_at").notNull().default(5),
     unit: text("unit").notNull().default("pcs"),
+    options: text("options"),
     active: boolean("active").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
@@ -126,6 +127,10 @@ export const orders = pgTable(
     total: bigint("total", { mode: "number" }).notNull(),
     costTotal: bigint("cost_total", { mode: "number" }).notNull().default(0),
     pointsEarned: integer("points_earned").notNull().default(0),
+    orderType: text("order_type", { enum: ["dine_in", "takeaway"] })
+      .notNull()
+      .default("dine_in"),
+    tableLabel: text("table_label"),
     paymentMethod: text("payment_method", {
       enum: ["cash", "card", "qris"],
     }).notNull(),
@@ -164,6 +169,7 @@ export const orderItems = pgTable(
     unitPrice: bigint("unit_price", { mode: "number" }).notNull(),
     cost: bigint("cost", { mode: "number" }).notNull().default(0),
     qty: integer("qty").notNull(),
+    note: text("note"),
     lineTotal: bigint("line_total", { mode: "number" }).notNull(),
   },
   (t) => [index("order_items_order_idx").on(t.orderId)],
@@ -202,6 +208,7 @@ export const settings = pgTable("settings", {
   receiptWidth: text("receipt_width", { enum: ["58", "80"] })
     .notNull()
     .default("80"),
+  qrisPayload: text("qris_payload").notNull().default(""),
   pointsPerAmount: bigint("points_per_amount", { mode: "number" })
     .notNull()
     .default(1_000_000),

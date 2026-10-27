@@ -7,7 +7,8 @@ GitHub Actions dan dipublikasikan sebagai GitHub Release.
 
 - Login username + PIN (butuh internet pada login pertama).
 - Katalog, kategori, pelanggan, pengaturan tersimpan di IndexedDB tablet.
-- Jual offline: keranjang, pembayaran tunai/QRIS/kartu, struk.
+- Jual offline: varian menu, catatan item, dine-in/bungkus + meja,
+  pembayaran tunai/QRIS/kartu (gambar QRIS ikut tersinkron), struk.
 - Antrean pesanan offline; sinkron otomatis saat online.
 - Tombol **Update** memeriksa GitHub Releases, mengunduh APK, lalu membuka
   installer Android.
@@ -25,6 +26,7 @@ GitHub Actions dan dipublikasikan sebagai GitHub Release.
    - Total dihitung ulang; jika tidak cocok → `rejected` (tidak disimpan).
    - Penjualan diterima meski stok server sudah berkurang (offline
      oversell); stok bisa negatif dan muncul sebagai konflik stok.
+   - Varian, catatan item, tipe order, dan meja ikut dikirim.
    - Nomor struk final dibuat server (`KDJ-YYMMDD-NNN`).
 5. Server mengembalikan snapshot baru: **katalog & stok server menang**.
    Pesanan lokal tidak dihapus; statusnya `synced`/`rejected`.

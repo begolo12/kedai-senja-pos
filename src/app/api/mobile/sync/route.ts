@@ -24,6 +24,7 @@ const itemSchema = z.object({
   unitPrice: z.number().int().min(0),
   cost: z.number().int().min(0),
   qty: z.number().int().min(1).max(999),
+  note: z.string().trim().max(160).optional(),
 });
 
 const orderSchema = z.object({
@@ -37,6 +38,8 @@ const orderSchema = z.object({
   taxAmount: z.number().int().min(0),
   total: z.number().int().min(1),
   costTotal: z.number().int().min(0),
+  orderType: z.enum(["dine_in", "takeaway"]).default("dine_in"),
+  tableLabel: z.string().trim().max(40).optional(),
   paymentMethod: z.enum(["cash", "card", "qris"]),
   amountPaid: z.number().int().min(0),
   changeDue: z.number().int().min(0),
@@ -70,6 +73,7 @@ async function pullSnapshot() {
         cost: products.cost,
         stock: products.stock,
         unit: products.unit,
+        options: products.options,
       })
       .from(products)
       .where(eq(products.active, true))
@@ -90,6 +94,7 @@ async function pullSnapshot() {
       currency: settingsRow.currency,
       taxRate: settingsRow.taxRate,
       receiptWidth: settingsRow.receiptWidth,
+      qrisPayload: settingsRow.qrisPayload,
       receiptFooter: settingsRow.receiptFooter,
       pointsPerAmount: settingsRow.pointsPerAmount,
     },
@@ -207,6 +212,8 @@ async function pushOrder(userId: number, input: OrderInput): Promise<SyncResult>
         total: input.total,
         costTotal: input.costTotal,
         pointsEarned: 0,
+        orderType: input.orderType,
+        tableLabel: input.tableLabel || null,
         paymentMethod: input.paymentMethod,
         amountPaid: input.amountPaid,
         changeDue: input.changeDue,
@@ -224,6 +231,7 @@ async function pushOrder(userId: number, input: OrderInput): Promise<SyncResult>
         unitPrice: item.unitPrice,
         cost: item.cost,
         qty: item.qty,
+        note: item.note || null,
         lineTotal: item.unitPrice * item.qty,
       })),
     );

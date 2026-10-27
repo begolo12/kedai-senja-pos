@@ -37,6 +37,7 @@ import {
   type DiscountType,
 } from "@/lib/money";
 import { checkoutAction } from "@/lib/actions/sales";
+import { QRCodeSVG } from "qrcode.react";
 
 export type PosProduct = {
   id: number;
@@ -49,11 +50,12 @@ export type PosProduct = {
   categoryId: number | null;
   categoryName: string | null;
   categoryColor: string | null;
+  options: string | null;
 };
 
 type Category = { id: number; name: string; color: string };
 type CustomerOption = { id: number; name: string; phone: string | null; points: number };
-type Line = { productId: number; qty: number };
+type Line = { id: string; productId: number; qty: number; note: string };
 type PaymentMethod = "cash" | "card" | "qris";
 
 const STORAGE_KEY = "pos.draft.v1";
@@ -70,12 +72,14 @@ export function PosTerminal({
   customers,
   currency,
   taxRate,
+  qrisPayload,
 }: {
   products: PosProduct[];
   categories: Category[];
   customers: CustomerOption[];
   currency: string;
   taxRate: number;
+  qrisPayload: string;
 }) {
   const router = useRouter();
   const [lines, setLines] = useState<Line[]>([]);
@@ -87,6 +91,11 @@ export function PosTerminal({
   const [discountDraft, setDiscountDraft] = useState("");
   const [customerId, setCustomerId] = useState<number | null>(null);
   const [customerQuery, setCustomerQuery] = useState("");
+  const [orderType, setOrderType] = useState<"dine_in" | "takeaway">("dine_in");
+  const [tableLabel, setTableLabel] = useState("");
+  const [optionProduct, setOptionProduct] = useState<PosProduct | null>(null);
+  const [optionChoice, setOptionChoice] = useState("");
+  const [optionNote, setOptionNote] = useState("");
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [method, setMethod] = useState<PaymentMethod>("cash");
   const [cashInput, setCashInput] = useState("");
@@ -97,20 +106,30 @@ export function PosTerminal({
 
   const byId = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
 
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
-        const saved = JSON.parse(raw) as { lines?: Line[] };
+        const saved = JSON.parse(raw) as {
+          lines?: Line[];
+          orderType?: "dine_in" | "takeaway";
+          tableLabel?: string;
+        };
+        if (saved.orderType === "dine_in" || saved.orderType === "takeaway") {
+          setOrderType(saved.orderType);
+        }
+        if (typeof saved.tableLabel === "string") setTableLabel(saved.tableLabel);
         if (Array.isArray(saved.lines)) {
           // Hydration-safe restore: server HTML starts empty, draft arrives after mount.
-          // eslint-disable-next-line react-hooks/set-state-in-effect
           setLines(
             saved.lines.filter(
               (line) =>
+                typeof line.id === "string" &&
                 Number.isInteger(line.productId) &&
                 Number.isInteger(line.qty) &&
                 line.qty > 0 &&
+                typeof line.note === "string" &&
                 byId.has(line.productId),
             ),
           );
@@ -122,12 +141,17 @@ export function PosTerminal({
     setHydrated(true);
     searchRef.current?.focus();
   }, [byId]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   useEffect(() => {
     if (!hydrated) return;
     if (lines.length === 0) localStorage.removeItem(STORAGE_KEY);
-    else localStorage.setItem(STORAGE_KEY, JSON.stringify({ lines }));
-  }, [lines, hydrated]);
+    else
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ lines, orderType, tableLabel }),
+      );
+  }, [lines, hydrated, orderType, tableLabel]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -170,37 +194,63 @@ export function PosTerminal({
   const paid = method === "cash" ? parseMoneyInput(cashInput) : totals.total;
   const change = paid - totals.total;
 
-  function addProduct(product: PosProduct) {
-    if (product.stock <= 0) {
-      toast.warning(`${product.name} stoknya habis.`);
-      return;
-    }
-    const existing = lines.find((line) => line.productId === product.id);
-    if (existing && existing.qty >= product.stock) {
+  function addLine(product: PosProduct, note = "") {
+    const totalQty = lines
+      .filter((line) => line.productId === product.id)
+      .reduce((sum, line) => sum + line.qty, 0);
+    if (product.stock <= 0 || totalQty >= product.stock) {
       toast.warning(`Stok ${product.name} tinggal ${product.stock}.`);
       return;
     }
-    setLines((prev) =>
-      existing
-        ? prev.map((line) =>
-            line.productId === product.id ? { ...line, qty: line.qty + 1 } : line,
-          )
-        : [...prev, { productId: product.id, qty: 1 }],
-    );
+    const id = `${product.id}::${note}`;
+    setLines((prev) => {
+      const existing = prev.find((line) => line.id === id);
+      return existing
+        ? prev.map((line) => (line.id === id ? { ...line, qty: line.qty + 1 } : line))
+        : [...prev, { id, productId: product.id, qty: 1, note }];
+    });
     setQuery("");
   }
 
-  function setQty(productId: number, qty: number) {
-    const product = byId.get(productId);
+  function chooseProduct(product: PosProduct) {
+    const choices = (product.options ?? "")
+      .split(/[,;]/)
+      .map((choice) => choice.trim())
+      .filter(Boolean);
+    if (choices.length > 0) {
+      setOptionProduct(product);
+      setOptionChoice(choices[0]);
+      setOptionNote("");
+      return;
+    }
+    addLine(product);
+  }
+
+  function addWithOptions() {
+    if (!optionProduct) return;
+    const note = [optionChoice, optionNote.trim()].filter(Boolean).join(" · ");
+    addLine(optionProduct, note);
+    setOptionProduct(null);
+    setOptionNote("");
+  }
+
+  function setQty(lineId: string, qty: number) {
+    const line = lines.find((item) => item.id === lineId);
+    if (!line) return;
+    const product = byId.get(line.productId);
     if (!product) return;
-    const next = Math.min(Math.max(1, qty), product.stock);
+    const otherQty = lines
+      .filter((item) => item.productId === line.productId && item.id !== lineId)
+      .reduce((sum, item) => sum + item.qty, 0);
+    const max = Math.max(1, product.stock - otherQty);
+    const next = Math.min(Math.max(1, qty), max);
     setLines((prev) =>
-      prev.map((line) => (line.productId === productId ? { ...line, qty: next } : line)),
+      prev.map((item) => (item.id === lineId ? { ...item, qty: next } : item)),
     );
   }
 
-  function removeLine(productId: number) {
-    setLines((prev) => prev.filter((line) => line.productId !== productId));
+  function removeLine(lineId: string) {
+    setLines((prev) => prev.filter((line) => line.id !== lineId));
   }
 
   function submitSearch(event: React.FormEvent) {
@@ -215,7 +265,7 @@ export function PosTerminal({
       toast.error("Produk tidak ditemukan.");
       return;
     }
-    addProduct(target);
+    chooseProduct(target);
   }
 
   function openPayment(next: PaymentMethod) {
@@ -255,9 +305,15 @@ export function PosTerminal({
     startTransition(async () => {
       const result = await checkoutAction({
         clientId: clientId.current,
-        items: lines.map((line) => ({ productId: line.productId, qty: line.qty })),
+        items: lines.map((line) => ({
+          productId: line.productId,
+          qty: line.qty,
+          note: line.note,
+        })),
         discountType,
         discountValue,
+        orderType,
+        tableLabel,
         paymentMethod: method,
         amountPaid: paid,
         customerId,
@@ -273,6 +329,7 @@ export function PosTerminal({
       setDiscountValue(0);
       setDiscountDraft("");
       setCustomerId(null);
+      setTableLabel("");
       setPaymentOpen(false);
       localStorage.removeItem(STORAGE_KEY);
       router.push(`/receipt/${result.orderId}?fresh=1`);
@@ -348,7 +405,7 @@ export function PosTerminal({
                 <button
                   key={product.id}
                   type="button"
-                  onClick={() => addProduct(product)}
+                  onClick={() => chooseProduct(product)}
                   disabled={soldOut}
                   data-product-id={product.id}
                   className={cn(
@@ -419,6 +476,42 @@ export function PosTerminal({
             >
               <Trash2 className="size-4" />
             </Button>
+          ) : null}
+        </div>
+
+        <div className="grid grid-cols-2 gap-1 border-b border-border px-4 py-2">
+          <button
+            type="button"
+            onClick={() => setOrderType("dine_in")}
+            className={cn(
+              "h-7 border px-2 text-[11px]",
+              orderType === "dine_in"
+                ? "border-foreground bg-foreground text-background"
+                : "border-border text-muted-foreground",
+            )}
+          >
+            Dine-in
+          </button>
+          <button
+            type="button"
+            onClick={() => setOrderType("takeaway")}
+            className={cn(
+              "h-7 border px-2 text-[11px]",
+              orderType === "takeaway"
+                ? "border-foreground bg-foreground text-background"
+                : "border-border text-muted-foreground",
+            )}
+          >
+            Bungkus
+          </button>
+          {orderType === "dine_in" ? (
+            <Input
+              value={tableLabel}
+              onChange={(event) => setTableLabel(event.target.value)}
+              placeholder="Meja / nama (opsional)"
+              aria-label="Nomor meja atau nama pelanggan"
+              className="col-span-2 h-7 rounded-none border-border bg-transparent px-2 text-[11px]"
+            />
           ) : null}
         </div>
 
@@ -504,7 +597,7 @@ export function PosTerminal({
             <ul className="divide-y divide-dashed divide-border">
               {cart.map((line) => (
                 <li
-                  key={line.productId}
+                  key={line.id}
                   className="flex gap-2 px-4 py-3 animate-in fade-in-0 slide-in-from-bottom-1 duration-150"
                 >
                   <div className="min-w-0 flex-1">
@@ -512,11 +605,14 @@ export function PosTerminal({
                     <p className="font-mono text-[11px] text-muted-foreground">
                       {formatMoney(line.product.price, currency)}
                     </p>
+                    {line.note ? (
+                      <p className="mt-0.5 text-[11px] text-signal">{line.note}</p>
+                    ) : null}
                     <div className="mt-1.5 flex items-center gap-1">
                       <button
                         type="button"
                         aria-label={`Kurangi ${line.product.name}`}
-                        onClick={() => setQty(line.productId, line.qty - 1)}
+                        onClick={() => setQty(line.id, line.qty - 1)}
                         className="grid size-6 place-items-center border border-border transition-colors hover:bg-muted"
                       >
                         <Minus className="size-3" />
@@ -525,7 +621,7 @@ export function PosTerminal({
                         value={line.qty}
                         onChange={(event) => {
                           const next = Number(event.target.value.replace(/\D/g, ""));
-                          if (Number.isFinite(next)) setQty(line.productId, next || 1);
+                          if (Number.isFinite(next)) setQty(line.id, next || 1);
                         }}
                         aria-label={`Jumlah ${line.product.name}`}
                         className="h-6 w-10 border border-border bg-transparent text-center font-mono text-xs outline-none focus:border-ring"
@@ -533,7 +629,7 @@ export function PosTerminal({
                       <button
                         type="button"
                         aria-label={`Tambah ${line.product.name}`}
-                        onClick={() => setQty(line.productId, line.qty + 1)}
+                        onClick={() => setQty(line.id, line.qty + 1)}
                         className="grid size-6 place-items-center border border-border transition-colors hover:bg-muted"
                       >
                         <Plus className="size-3" />
@@ -541,7 +637,7 @@ export function PosTerminal({
                       <button
                         type="button"
                         aria-label={`Hapus ${line.product.name}`}
-                        onClick={() => removeLine(line.productId)}
+                        onClick={() => removeLine(line.id)}
                         className="ml-1 grid size-6 place-items-center text-muted-foreground transition-colors hover:text-destructive"
                       >
                         <X className="size-3.5" />
@@ -735,9 +831,30 @@ export function PosTerminal({
                 </span>
               </div>
             </div>
+          ) : method === "qris" ? (
+            <div className="border border-dashed px-3 py-4 text-center">
+              {qrisPayload ? (
+                qrisPayload.startsWith("data:image") ? (
+                  <img
+                    src={qrisPayload}
+                    alt="QRIS merchant"
+                    className="mx-auto h-48 w-48 bg-white object-contain p-1"
+                  />
+                ) : (
+                  <QRCodeSVG value={qrisPayload} size={190} className="mx-auto bg-white p-2" />
+                )
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  QRIS belum diatur. Unggah gambar di Pengaturan.
+                </p>
+              )}
+              <p className="mt-2 text-xs text-muted-foreground">
+                Pindai, lalu konfirmasi setelah pembayaran berhasil.
+              </p>
+            </div>
           ) : (
             <p className="border border-dashed px-3 py-4 text-center text-xs text-muted-foreground">
-              Konfirmasi setelah pembayaran {method === "qris" ? "QRIS" : "kartu"} berhasil.
+              Konfirmasi setelah pembayaran kartu berhasil.
             </p>
           )}
 
@@ -754,6 +871,53 @@ export function PosTerminal({
           >
             {pending ? <Loader2 className="animate-spin" /> : null}
             Terima pembayaran
+          </Button>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(optionProduct)}
+        onOpenChange={(open) => {
+          if (!open) setOptionProduct(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-serif text-2xl">{optionProduct?.name}</DialogTitle>
+            <DialogDescription>Pilih varian, tambah catatan bila perlu.</DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-wrap gap-1.5">
+            {(optionProduct?.options ?? "")
+              .split(/[,;]/)
+              .map((choice) => choice.trim())
+              .filter(Boolean)
+              .map((choice) => (
+                <button
+                  key={choice}
+                  type="button"
+                  onClick={() => setOptionChoice(choice)}
+                  className={cn(
+                    "border px-2.5 py-1.5 text-xs",
+                    optionChoice === choice
+                      ? "border-foreground bg-foreground text-background"
+                      : "border-border text-muted-foreground",
+                  )}
+                >
+                  {choice}
+                </button>
+              ))}
+          </div>
+          <Input
+            value={optionNote}
+            onChange={(event) => setOptionNote(event.target.value)}
+            placeholder="Catatan (mis. tanpa timun)"
+            maxLength={100}
+          />
+          <Button
+            onClick={addWithOptions}
+            className="h-10 bg-signal text-signal-foreground hover:bg-signal/90"
+          >
+            Tambahkan · {formatMoney(optionProduct?.price ?? 0, currency)}
           </Button>
         </DialogContent>
       </Dialog>

@@ -14,7 +14,7 @@ export function receiptHtml(order: PendingOrder, settings: Settings) {
     .map(
       (item) => `
         <tr>
-          <td>${sanitize(item.name)}<br><span class="muted">${item.qty} × ${formatMoney(item.unitPrice)}</span></td>
+          <td>${sanitize(item.name)}${item.note ? `<br><span class="note">${sanitize(item.note)}</span>` : ""}<br><span class="muted">${item.qty} × ${formatMoney(item.unitPrice)}</span></td>
           <td class="right">${formatMoney(item.unitPrice * item.qty)}</td>
         </tr>`,
     )
@@ -28,6 +28,7 @@ export function receiptHtml(order: PendingOrder, settings: Settings) {
   h1 { font-family: Georgia, serif; font-size: 20px; text-align: center; margin: 0; }
   .center { text-align: center; }
   .muted { color: #6b6257; font-size: 9px; }
+  .note { color: #8a5a1e; font-size: 9px; }
   .rule { border-top: 1px dashed #c9c0b1; margin: 10px 0; }
   table { width: 100%; border-collapse: collapse; }
   td { vertical-align: top; padding: 2px 0; }
@@ -40,7 +41,8 @@ export function receiptHtml(order: PendingOrder, settings: Settings) {
   <div class="center muted">${sanitize(settings.address)}<br>${sanitize(settings.phone)}</div>
   <div class="rule"></div>
   <div class="row"><span>${sanitize(order.serverNumber ?? "OFFLINE")}</span><span>${formatTime(order.createdAt)}</span></div>
-  <div class="row"><span>${order.paymentMethod.toUpperCase()}</span><span>${order.status === "pending" ? "Belum sinkron" : "Tersinkron"}</span></div>
+  <div class="row"><span>${order.orderType === "takeaway" ? "Bungkus" : "Dine-in"} ${sanitize(order.tableLabel ?? "")}</span><span>${order.paymentMethod.toUpperCase()}</span></div>
+  <div class="row"><span>${order.status === "pending" ? "Belum sinkron" : "Tersinkron"}</span></div>
   <div class="rule"></div>
   <table>${rows}</table>
   <div class="rule"></div>

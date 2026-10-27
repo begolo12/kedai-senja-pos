@@ -1,8 +1,9 @@
 import { useMemo, useRef, useState } from "react";
+import { QRCodeSVG } from "qrcode.react";
 import { computeTotals, formatMoney, formatNumber, parseMoneyInput } from "../lib/money";
 import type { Category, Product, Settings } from "../lib/types";
 
-export type CartLine = { product: Product; qty: number };
+export type CartLine = { id: string; product: Product; qty: number; note: string };
 
 export function PosScreen({
   products,
@@ -19,11 +20,16 @@ export function PosScreen({
   categories: Category[];
   settings: Settings;
   cart: CartLine[];
-  onAdd: (product: Product) => void;
-  onQty: (productId: number, qty: number) => void;
-  onRemove: (productId: number) => void;
+  onAdd: (product: Product, note?: string) => void;
+  onQty: (lineId: string, qty: number) => void;
+  onRemove: (lineId: string) => void;
   onClear: () => void;
-  onCheckout: (method: "cash" | "qris" | "card", amountPaid: number) => void;
+  onCheckout: (
+    method: "cash" | "qris" | "card",
+    amountPaid: number,
+    orderType: "dine_in" | "takeaway",
+    tableLabel: string,
+  ) => void;
 }) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<number | "all">("all");
@@ -31,6 +37,11 @@ export function PosScreen({
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [method, setMethod] = useState<"cash" | "qris" | "card">("cash");
   const [cash, setCash] = useState("");
+  const [orderType, setOrderType] = useState<"dine_in" | "takeaway">("dine_in");
+  const [tableLabel, setTableLabel] = useState("");
+  const [optionProduct, setOptionProduct] = useState<Product | null>(null);
+  const [optionChoice, setOptionChoice] = useState("");
+  const [optionNote, setOptionNote] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
 
   const totals = useMemo(
@@ -58,6 +69,21 @@ export function PosScreen({
     });
   }, [products, query, category]);
 
+  function chooseProduct(product: Product) {
+    const choices = (product.options ?? "")
+      .split(/[,;]/)
+      .map((choice) => choice.trim())
+      .filter(Boolean);
+    if (choices.length > 0) {
+      setOptionProduct(product);
+      setOptionChoice(choices[0]);
+      setOptionNote("");
+      return;
+    }
+    onAdd(product);
+    setQuery("");
+  }
+
   function submitSearch(event: React.FormEvent) {
     event.preventDefault();
     const q = query.trim().toLowerCase();
@@ -68,8 +94,7 @@ export function PosScreen({
     );
     const target = exact ?? filtered[0];
     if (target) {
-      onAdd(target);
-      setQuery("");
+      chooseProduct(target);
       searchRef.current?.focus();
     }
   }
@@ -81,9 +106,18 @@ export function PosScreen({
   }
 
   function confirm() {
-    onCheckout(method, paid);
+    onCheckout(method, paid, orderType, tableLabel);
     setPaymentOpen(false);
     setCartOpen(false);
+  }
+
+  function addWithOptions() {
+    if (!optionProduct) return;
+    const note = [optionChoice, optionNote.trim()].filter(Boolean).join(" · ");
+    onAdd(optionProduct, note);
+    setOptionProduct(null);
+    setOptionNote("");
+    setQuery("");
   }
 
   const cashOptions = [
@@ -139,7 +173,7 @@ export function PosScreen({
                 key={product.id}
                 className="product"
                 disabled={product.stock <= 0}
-                onClick={() => onAdd(product)}
+                onClick={() => chooseProduct(product)}
               >
                 <span className="product-name">{product.name}</span>
                 <span className="product-bottom">
@@ -171,20 +205,44 @@ export function PosScreen({
           </button>
         </header>
 
+        <div className="order-type">
+          <button
+            className={orderType === "dine_in" ? "chip active" : "chip"}
+            onClick={() => setOrderType("dine_in")}
+          >
+            Dine-in
+          </button>
+          <button
+            className={orderType === "takeaway" ? "chip active" : "chip"}
+            onClick={() => setOrderType("takeaway")}
+          >
+            Bungkus
+          </button>
+          {orderType === "dine_in" ? (
+            <input
+              value={tableLabel}
+              onChange={(event) => setTableLabel(event.target.value)}
+              placeholder="Meja / nama"
+              aria-label="Nomor meja atau nama"
+            />
+          ) : null}
+        </div>
+
         <div className="ticket-lines">
           {cart.length === 0 ? (
             <p className="empty-ticket">Belum ada item. Ketuk produk untuk mulai.</p>
           ) : (
             cart.map((line) => (
-              <div className="line" key={line.product.id}>
+              <div className="line" key={line.id}>
                 <div>
                   <strong>{line.product.name}</strong>
                   <small>{formatMoney(line.product.price)}</small>
+                  {line.note ? <small className="note">{line.note}</small> : null}
                   <div className="qty">
-                    <button onClick={() => onQty(line.product.id, line.qty - 1)}>−</button>
+                    <button onClick={() => onQty(line.id, line.qty - 1)}>−</button>
                     <span>{line.qty}</span>
-                    <button onClick={() => onQty(line.product.id, line.qty + 1)}>+</button>
-                    <button className="remove" onClick={() => onRemove(line.product.id)}>
+                    <button onClick={() => onQty(line.id, line.qty + 1)}>+</button>
+                    <button className="remove" onClick={() => onRemove(line.id)}>
                       ×
                     </button>
                   </div>
@@ -254,11 +312,60 @@ export function PosScreen({
                   <span className={change < 0 ? "error-text" : ""}>{formatMoney(Math.max(0, change))}</span>
                 </div>
               </>
+            ) : method === "qris" ? (
+              <div className="qris-box">
+                {settings.qrisPayload ? (
+                  settings.qrisPayload.startsWith("data:image") ? (
+                    <img src={settings.qrisPayload} alt="QRIS merchant" />
+                  ) : (
+                    <QRCodeSVG value={settings.qrisPayload} size={180} />
+                  )
+                ) : (
+                  <p className="hint">QRIS belum diatur di Pengaturan.</p>
+                )}
+                <p className="hint">Pindai, lalu konfirmasi setelah berhasil.</p>
+              </div>
             ) : (
-              <p className="hint">Konfirmasi setelah pembayaran diterima.</p>
+              <p className="hint">Konfirmasi setelah pembayaran kartu diterima.</p>
             )}
             <button className="primary" disabled={method === "cash" && change < 0} onClick={confirm}>
               Terima pembayaran
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {optionProduct ? (
+        <div className="modal-backdrop" onClick={() => setOptionProduct(null)}>
+          <div className="modal" onClick={(event) => event.stopPropagation()}>
+            <span className="eyebrow">Pilih varian</span>
+            <h2>{optionProduct.name}</h2>
+            <div className="methods">
+              {(optionProduct.options ?? "")
+                .split(/[,;]/)
+                .map((choice) => choice.trim())
+                .filter(Boolean)
+                .map((choice) => (
+                  <button
+                    key={choice}
+                    className={optionChoice === choice ? "chip active" : "chip"}
+                    onClick={() => setOptionChoice(choice)}
+                  >
+                    {choice}
+                  </button>
+                ))}
+            </div>
+            <label className="cash">
+              Catatan
+              <input
+                value={optionNote}
+                onChange={(event) => setOptionNote(event.target.value)}
+                placeholder="mis. tanpa timun"
+                maxLength={100}
+              />
+            </label>
+            <button className="primary" onClick={addWithOptions}>
+              Tambahkan · {formatMoney(optionProduct.price)}
             </button>
           </div>
         </div>

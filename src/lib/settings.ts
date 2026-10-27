@@ -11,6 +11,7 @@ const FALLBACK: Settings = {
   taxRate: 1100,
   receiptFooter: "Terima kasih.",
   receiptWidth: "80",
+  qrisPayload: "",
   pointsPerAmount: 1_000_000,
   updatedAt: new Date(),
 };

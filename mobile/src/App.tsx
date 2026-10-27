@@ -79,13 +79,17 @@ export default function App() {
         for (const result of response.results) {
           const existing = await db.orders.get(result.clientId);
           if (!existing) continue;
-          await db.orders.put({
+          const updated: PendingOrder = {
             ...existing,
             status: result.status === "rejected" ? "rejected" : "synced",
             serverOrderId: result.orderId,
             serverNumber: result.number,
             error: result.error,
-          });
+          };
+          await db.orders.put(updated);
+          setReceipt((current) =>
+            current && current.clientId === result.clientId ? updated : current,
+          );
         }
         await saveSnapshot(response);
         const fresh = await loadLocal();
@@ -154,37 +158,48 @@ export default function App() {
     setView("history");
   }
 
-  function addProduct(product: Product) {
+  function addProduct(product: Product, note = "") {
     setCart((prev) => {
-      const existing = prev.find((line) => line.product.id === product.id);
+      const id = `${product.id}::${note}`;
+      const inProduct = prev
+        .filter((line) => line.product.id === product.id)
+        .reduce((sum, line) => sum + line.qty, 0);
+      if (product.stock <= 0 || inProduct >= product.stock) return prev;
+      const existing = prev.find((line) => line.id === id);
       if (existing) {
-        if (existing.qty >= product.stock) return prev;
         return prev.map((line) =>
-          line.product.id === product.id ? { ...line, qty: line.qty + 1 } : line,
+          line.id === id ? { ...line, qty: line.qty + 1 } : line,
         );
       }
-      if (product.stock <= 0) return prev;
-      return [...prev, { product, qty: 1 }];
+      return [...prev, { id, product, qty: 1, note }];
     });
   }
 
-  function setQty(productId: number, qty: number) {
+  function setQty(lineId: string, qty: number) {
     setCart((prev) =>
       prev
-        .map((line) =>
-          line.product.id === productId
-            ? { ...line, qty: Math.min(Math.max(1, qty), line.product.stock) }
-            : line,
-        )
+        .map((line) => {
+          if (line.id !== lineId) return line;
+          const others = prev
+            .filter((item) => item.product.id === line.product.id && item.id !== lineId)
+            .reduce((sum, item) => sum + item.qty, 0);
+          const max = Math.max(1, line.product.stock - others);
+          return { ...line, qty: Math.min(Math.max(1, qty), max) };
+        })
         .filter((line) => line.qty > 0),
     );
   }
 
-  function removeProduct(productId: number) {
-    setCart((prev) => prev.filter((line) => line.product.id !== productId));
+  function removeProduct(lineId: string) {
+    setCart((prev) => prev.filter((line) => line.id !== lineId));
   }
 
-  async function checkout(method: "cash" | "qris" | "card", amountPaid: number) {
+  async function checkout(
+    method: "cash" | "qris" | "card",
+    amountPaid: number,
+    orderType: "dine_in" | "takeaway",
+    tableLabel: string,
+  ) {
     if (!data) return;
     const totals = computeTotals(
       cart.map((line) => ({ unitPrice: line.product.price, qty: line.qty })),
@@ -199,12 +214,15 @@ export default function App() {
         unitPrice: line.product.price,
         cost: line.product.cost,
         qty: line.qty,
+        note: line.note,
       })),
       discountType: null,
       discountValue: 0,
       taxRate: data.settings.taxRate,
       ...totals,
       costTotal: cart.reduce((sum, line) => sum + line.product.cost * line.qty, 0),
+      orderType,
+      tableLabel: tableLabel || undefined,
       paymentMethod: method,
       amountPaid: method === "cash" ? amountPaid : totals.total,
       changeDue: (method === "cash" ? amountPaid : totals.total) - totals.total,
@@ -342,7 +360,7 @@ export default function App() {
           onQty={setQty}
           onRemove={removeProduct}
           onClear={() => setCart([])}
-          onCheckout={(method, paid) => void checkout(method, paid)}
+          onCheckout={(method, paid, type, table) => void checkout(method, paid, type, table)}
         />
       </main>
 
@@ -403,12 +421,18 @@ function ReceiptOverlay({
         <span className="eyebrow">Pembayaran diterima</span>
         <h2>{formatMoney(order.total)}</h2>
         <p className="hint">
-          {order.serverNumber ?? "Offline"} · {order.status === "pending" ? "Menunggu sinkron" : "Tersinkron"}
+          {order.orderType === "takeaway" ? "Bungkus" : "Dine-in"}
+          {order.tableLabel ? ` · ${order.tableLabel}` : ""} ·{" "}
+          {order.serverNumber ?? "Offline"} ·{" "}
+          {order.status === "pending" ? "Menunggu sinkron" : "Tersinkron"}
         </p>
         <div className="receipt-preview">
           {order.items.map((item) => (
             <div className="sum" key={item.productId}>
-              <span>{item.qty}× {item.name}</span>
+              <span>
+                {item.qty}× {item.name}
+                {item.note ? <small className="note"> · {item.note}</small> : null}
+              </span>
               <span>{formatMoney(item.unitPrice * item.qty)}</span>
             </div>
           ))}
@@ -570,6 +594,8 @@ async function printTest(settings: Settings) {
     taxAmount: 308_000,
     total: 3_108_000,
     costTotal: 950_000,
+    orderType: "dine_in",
+    tableLabel: "Meja tes",
     paymentMethod: "cash",
     amountPaid: 5_000_000,
     changeDue: 1_892_000,

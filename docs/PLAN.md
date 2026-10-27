@@ -52,7 +52,12 @@ eksplisit lewat `pnpm db:setup`; tidak ada DDL otomatis di request path.
 - Keranjang: tambah, ubah qty, hapus, kosongkan; draft tersimpan di
   `localStorage` dan dipulihkan setelah refresh.
 - Pelanggan opsional dari daftar; poin ditampilkan.
+- Tipe pesanan dine-in/bungkus + nomor meja/nama; tercetak di struk.
+- Varian menu (level pedas, less sugar, dingin/panas) per produk.
+- Catatan per item (tanpa timun, extra sambal).
 - Diskon pesanan: persen atau nominal, dibatasi subtotal.
+- QRIS merchant: unggah gambar di Pengaturan, tampil saat pembayaran.
+- Impor menu CSV/Excel paste; kategori otomatis; update by nama.
 - Pajak dari pengaturan, dihitung setelah diskon.
 - Pembayaran tunai (kembalian + pintasan nominal), QRIS, kartu.
 - Idempotensi lewat `clientId` UUID: klik ganda tidak membuat dua pesanan.
@@ -71,6 +76,8 @@ eksplisit lewat `pnpm db:setup`; tidak ada DDL otomatis di request path.
   batas stok rendah, satuan, status jual.
 - Dua mode: aktif/nonaktif (riwayat tetap), bukan hapus.
 - CRUD kategori dengan warna; kategori terpakai tidak bisa dihapus.
+- Varian/pilihan per produk (satu grup, dipisah koma).
+- Impor massal: nama, kategori, harga, modal, stok, satuan, pilihan.
 - Tabel menampilkan margin dan nilai stok.
 
 ### 3.4 Stok
@@ -144,13 +151,13 @@ epoch milidetik.
 | --- | --- | --- |
 | `users` | name, username unik, pinHash (scrypt), role, active | Role `admin`/`cashier` |
 | `categories` | name unik, color, sortOrder | Warna dipakai sebagai penanda |
-| `products` | sku unik, barcode unik, name, categoryId, price, cost, stock, lowStockAt, unit, active | Harga & modal integer |
+| `products` | sku unik, barcode unik, name, categoryId, price, cost, stock, lowStockAt, unit, options, active | `options` = varian dipisah koma |
 | `customers` | name, phone unik, email, points, totalSpent | Poin = turunan transaksi |
 | `shifts` | userId, openedAt, closedAt, openingFloat, countedCash, expectedCash, status | Satu `open` per user (dijaga action) |
-| `orders` | number unik, clientId unik, shiftId, userId, customerId, subtotal, discount*, taxAmount, total, costTotal, pointsEarned, paymentMethod, amountPaid, changeDue, status, refunded* | Nomor harian `KDJ-YYMMDD-NNN` |
-| `order_items` | orderId, productId, name, sku, unitPrice, cost, qty, lineTotal | Snapshot nama/harga saat jual |
+| `orders` | number unik, clientId unik, shiftId, userId, customerId, subtotal, discount*, taxAmount, total, costTotal, pointsEarned, orderType, tableLabel, paymentMethod, amountPaid, changeDue, status, refunded* | Nomor harian `KDJ-YYMMDD-NNN` |
+| `order_items` | orderId, productId, name, sku, unitPrice, cost, qty, note, lineTotal | Snapshot nama/harga + varian/catatan |
 | `stock_movements` | productId, delta, reason, refType/refId, userId, note | Audit append-only |
-| `settings` | id=1, storeName, address, phone, currency, taxRate, pointsPerAmount, receiptFooter | Satu baris |
+| `settings` | id=1, storeName, address, phone, currency, taxRate, pointsPerAmount, receiptWidth, qrisPayload, receiptFooter | Satu baris; QRIS berupa payload/gambar |
 
 **Invarian**
 1. `stock >= 0`; penyesuaian yang membuat minus ditolak.

@@ -96,6 +96,10 @@ export default async function ReceiptPage({ params, searchParams }: PageProps<"/
             <span>Kasir {cashier}</span>
             <span>{order.order.paymentMethod.toUpperCase()}</span>
           </div>
+          <div className="flex justify-between">
+            <span>{order.order.orderType === "takeaway" ? "Bungkus" : "Dine-in"}</span>
+            <span>{order.order.tableLabel ?? "—"}</span>
+          </div>
           {order.customerName ? (
             <div className="flex justify-between">
               <span>Pelanggan</span>
@@ -112,6 +116,9 @@ export default async function ReceiptPage({ params, searchParams }: PageProps<"/
               <tr key={item.id} className="align-top">
                 <td className="pb-2.5">
                   <span className="block">{item.name}</span>
+                  {item.note ? (
+                    <span className="block text-[10px] text-[#8a5a1e]">{item.note}</span>
+                  ) : null}
                   <span className="text-[10px] text-[#6b6257]">
                     {item.qty} × {formatMoney(item.unitPrice, settings.currency)}
                   </span>

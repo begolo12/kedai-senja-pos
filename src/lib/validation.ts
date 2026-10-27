@@ -24,6 +24,7 @@ export const productSchema = z.object({
   stock: z.number().int().min(0, "Stok tidak boleh negatif."),
   lowStockAt: z.number().int().min(0).max(9999),
   unit: z.string().trim().min(1).max(12),
+  options: z.string().trim().max(300).optional().or(z.literal("")),
   active: z.boolean(),
 });
 
@@ -74,12 +75,15 @@ export const checkoutSchema = z.object({
       z.object({
         productId: z.number().int().positive(),
         qty: z.number().int().min(1).max(999),
+        note: z.string().trim().max(160).optional().or(z.literal("")),
       }),
     )
     .min(1, "Keranjang kosong.")
     .max(100),
   discountType: z.enum(["amount", "percent"]).nullable(),
   discountValue: z.number().int().min(0),
+  orderType: z.enum(["dine_in", "takeaway"]),
+  tableLabel: z.string().trim().max(40).optional().or(z.literal("")),
   paymentMethod: z.enum(["cash", "card", "qris"]),
   amountPaid: z.number().int().min(0),
   customerId: z.number().int().positive().nullable(),
@@ -103,6 +107,7 @@ export const settingsSchema = z.object({
   taxRate: z.number().int().min(0).max(5000),
   receiptFooter: z.string().trim().max(200),
   receiptWidth: z.enum(["58", "80"]),
+  qrisPayload: z.string().trim().max(500_000),
   pointsPerAmount: z.number().int().min(0),
 });
 

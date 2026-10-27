@@ -75,6 +75,7 @@ export async function getSetting(): Promise<Settings | undefined> {
     currency: row.currency,
     taxRate: row.taxRate,
     receiptWidth: row.receiptWidth,
+    qrisPayload: row.qrisPayload,
     receiptFooter: row.receiptFooter,
     pointsPerAmount: row.pointsPerAmount,
   };
