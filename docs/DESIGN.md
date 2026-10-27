@@ -185,3 +185,19 @@ Pengaturan, bukan sekadar label metode bayar.
 
 Impor menu memakai tempelan spreadsheet: pengguna tidak perlu mengisi satu
 per satu untuk 30 menu warkop.
+
+## 11. Multi-toko
+
+Login berakhir di layar **Pilih toko**: kartu toko dengan kode, alamat,
+pajak, dan lebar struk. Manajemen melihat semua toko; kasir hanya yang
+ditugaskan. Topbar dan sidebar selalu menampilkan toko aktif, dengan tautan
+**Ganti toko** tanpa logout.
+
+Manajemen punya menu **Toko** berisi kartu statistik (produk, pesanan hari
+ini, omzet), tombol buka toko, edit, tambah toko, serta opsi salin menu.
+Data toko tidak pernah tercampur: katalog, stok, pesanan, shift, pelanggan,
+QRIS, dan laporan difilter berdasarkan toko sesi.
+
+Tablet mengikuti urutan yang sama: ID → PIN → pilih toko. Cache lokal
+dibersihkan bila berpindah toko agar pesanan offline tidak masuk ke toko
+yang salah.
