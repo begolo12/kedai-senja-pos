@@ -102,10 +102,10 @@ export async function seedIfEmpty(db: DB) {
 
   const adminPin =
     process.env.SEED_ADMIN_PIN ??
-    (process.env.NODE_ENV === "production" ? "" : "1234");
+    (process.env.NODE_ENV === "production" ? "" : "123456");
   const cashierPin =
     process.env.SEED_CASHIER_PIN ??
-    (process.env.NODE_ENV === "production" ? "" : "5678");
+    (process.env.NODE_ENV === "production" ? "" : "123456");
   if (!/^\d{4,8}$/.test(adminPin) || !/^\d{4,8}$/.test(cashierPin)) {
     throw new Error(
       "SEED_ADMIN_PIN dan SEED_CASHIER_PIN wajib (4–8 digit) sebelum seed production.",

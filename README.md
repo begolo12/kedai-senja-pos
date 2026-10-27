@@ -42,8 +42,8 @@ Akun development (database lokal kosong):
 
 | ID Login | PIN | Akses |
 | --- | --- | --- |
-| `manajemen` | `1234` | semua toko, semua menu, kelola akun |
-| `kasir` | `5678` | Kemang saja: POS + shift |
+| `manajemen` | `123456` | semua toko, semua menu, kelola akun |
+| `kasir` | `123456` | Kemang saja: POS + shift |
 
 Seed berisi dua toko: **Warkop Senja — Kemang** dan **Tebet**. Kasir demo
 hanya ditugaskan ke Kemang.
