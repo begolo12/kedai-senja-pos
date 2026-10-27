@@ -92,3 +92,18 @@ publik agar pemeriksaan rilis berjalan tanpa secret. Izin Android
   URL asset harus `https://github.com/`.
 - Keystore, password, `DATABASE_URL`, dan `AUTH_SECRET` hanya ada di GitHub
   Secrets / Vercel Environment—tidak pernah di repo.
+## UI tablet
+
+- Header: identitas toko + kasir, status online/offline, antrean, tombol
+  sinkron. Versi aplikasi pindah ke Pengaturan.
+- Navigasi bawah tiga tab: **Kasir**, **Riwayat**, **Pengaturan**.
+- Keranjang: bar ringkas di atas navigasi (jumlah item + total + lihat
+  pesanan), atau panel kanan permanen pada layar ≥1000 px.
+- Kartu produk: aksen warna kategori, label varian, harga besar, target
+  sentuh ≥126 px.
+- Tombol qty 36 px, tombol bayar 48–52 px, input PIN/uang 50–54 px.
+- Perbaikan penting: pada lebar 720–999 px sebelumnya keranjang tidak bisa
+  dibuka; sekarang bar keranjang tetap tampil sampai panel permanen aktif.
+- Bukti: `docs/screens/mobile-login-390.png`, `mobile-store-390.png`,
+  `mobile-pos-390.png`, `mobile-ticket-390.png`, `mobile-payment-390.png`,
+  `mobile-pos-800.png`, `mobile-pos-1024.png`.
