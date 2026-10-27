@@ -172,3 +172,16 @@ Printer memakai lebar 58/80 mm dari Pengaturan; struk Android dikirim ke
 Android Print Framework, struk web ke dialog cetak browser.
 
 Bukti tablet: `docs/screens/mobile-pos.webp`.
+
+## 10. Varian & tipe order
+
+Produk dengan varian membuka pilihan ringkas sebelum masuk tiket (level
+pedas, less sugar, dingin/panas). Pilihan + catatan menjadi satu baris
+teks di tiket, struk, dan pesanan—tanpa dialog berlapis.
+
+Tiket punya dua tombol besar **Dine-in / Bungkus** dan isian meja/nama.
+Keduanya ikut tercetak. QRIS menampilkan gambar merchant yang diunggah dari
+Pengaturan, bukan sekadar label metode bayar.
+
+Impor menu memakai tempelan spreadsheet: pengguna tidak perlu mengisi satu
+per satu untuk 30 menu warkop.
