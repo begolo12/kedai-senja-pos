@@ -108,8 +108,10 @@ eksplisit lewat `pnpm db:setup`; tidak ada DDL otomatis di request path.
 ### 3.8 Pengaturan & staf (admin)
 - Identitas toko, alamat, telepon, footer struk.
 - Pajak (basis poin 1/100 %), aturan poin, mata uang (IDR).
-- CRUD staf: nama, username, role, PIN, aktif/nonaktif; tidak bisa
+- CRUD staf: nama, ID login, role, PIN, aktif/nonaktif; tidak bisa
   menonaktifkan diri sendiri atau menghapus admin aktif terakhir.
+- Login hanya ID + PIN (tanpa password). Manajemen dapat mengganti PIN
+  lewat tombol PIN dengan konfirmasi ulang.
 
 ### 3.9 Dashboard
 - Ringkasan hari ini vs kemarin, laba kotor, stok menipis.

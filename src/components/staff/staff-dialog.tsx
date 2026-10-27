@@ -63,7 +63,7 @@ export function StaffDialog({ staff }: { staff?: StaffValues }) {
         <DialogHeader>
           <DialogTitle className="font-serif text-2xl">{editing ? "Edit staf" : "Staf baru"}</DialogTitle>
           <DialogDescription>
-            PIN dipakai untuk masuk. {editing ? "Kosongkan PIN bila tidak ingin mengganti." : "Minimal 4 digit."}
+            Login memakai ID + PIN, tanpa password. {editing ? "Kosongkan PIN bila tidak ingin mengganti." : "PIN 4–8 digit."}
           </DialogDescription>
         </DialogHeader>
         <form
@@ -106,7 +106,7 @@ export function StaffDialog({ staff }: { staff?: StaffValues }) {
             </div>
             <div className="space-y-1">
               <Label htmlFor="s-username" className="text-[10px] tracking-[0.12em] text-muted-foreground uppercase">
-                Username
+                ID Login
               </Label>
               <Input
                 id="s-username"
@@ -118,7 +118,7 @@ export function StaffDialog({ staff }: { staff?: StaffValues }) {
             </div>
             <div className="space-y-1">
               <Label htmlFor="s-role" className="text-[10px] tracking-[0.12em] text-muted-foreground uppercase">
-                Role
+                Akses
               </Label>
               <select
                 id="s-role"
@@ -127,7 +127,7 @@ export function StaffDialog({ staff }: { staff?: StaffValues }) {
                 className="h-8 w-full border border-input bg-transparent px-2 text-sm outline-none focus:ring-2 focus:ring-ring/40"
               >
                 <option value="cashier">Kasir</option>
-                <option value="admin">Admin</option>
+                <option value="admin">Manajemen</option>
               </select>
             </div>
             <div className="space-y-1">

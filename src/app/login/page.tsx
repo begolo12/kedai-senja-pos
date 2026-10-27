@@ -65,7 +65,7 @@ export default async function LoginPage() {
           </p>
           <h2 className="mt-2 font-serif text-4xl tracking-tight">Selamat datang</h2>
           <p className="mt-2 mb-8 text-sm text-muted-foreground">
-            Masuk dengan username dan PIN staf.
+            Masuk dengan ID dan PIN staf. Tidak ada password.
           </p>
 
           <LoginForm />

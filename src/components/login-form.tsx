@@ -19,7 +19,7 @@ export function LoginForm() {
           htmlFor="username"
           className="text-[11px] tracking-[0.16em] text-muted-foreground uppercase"
         >
-          Username
+          ID Login
         </Label>
         <Input
           id="username"
@@ -28,7 +28,7 @@ export function LoginForm() {
           autoCapitalize="none"
           spellCheck={false}
           defaultValue={state.username ?? ""}
-          placeholder="mis. rani"
+          placeholder="mis. manajemen"
           className="h-11 font-mono text-sm"
           required
           autoFocus
@@ -50,7 +50,7 @@ export function LoginForm() {
             inputMode="numeric"
             pattern="[0-9]*"
             maxLength={8}
-            autoComplete="current-password"
+            autoComplete="off"
             placeholder="••••"
             className="h-11 pl-10 font-mono text-lg tracking-[0.4em]"
             required

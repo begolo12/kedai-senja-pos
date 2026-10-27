@@ -7,6 +7,7 @@ import { formatDate } from "@/lib/money";
 import { PageHeader } from "@/components/shared/page-header";
 import { StaffDialog } from "@/components/staff/staff-dialog";
 import { StaffToggle } from "@/components/staff/staff-toggle";
+import { PinDialog } from "@/components/staff/pin-dialog";
 
 export const metadata: Metadata = { title: "Staf" };
 
@@ -27,14 +28,14 @@ export default async function StaffPage() {
       <PageHeader
         eyebrow="Tim"
         title="Staf"
-        description="Admin mengatur produk, staf, dan pengaturan. Kasir menjalankan transaksi dan shift."
+        description="Manajemen mengatur produk, akun, PIN, dan pengaturan. Kasir menjalankan transaksi dan shift."
         actions={<StaffDialog />}
       />
 
       <section className="grid gap-px border border-border bg-border sm:grid-cols-3">
         <Stat label="Akun" value={String(stats.total)} />
         <Stat label="Aktif" value={String(stats.active ?? 0)} />
-        <Stat label="Admin aktif" value={String(stats.admins ?? 0)} />
+        <Stat label="Manajemen aktif" value={String(stats.admins ?? 0)} />
       </section>
 
       <section className="overflow-x-auto border border-border bg-card">
@@ -61,7 +62,7 @@ export default async function StaffPage() {
                 <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">@{staff.username}</td>
                 <td className="px-4 py-2.5">
                   <span className="stamp border-border text-muted-foreground">
-                    {staff.role === "admin" ? "Admin" : "Kasir"}
+                    {staff.role === "admin" ? "Manajemen" : "Kasir"}
                   </span>
                 </td>
                 <td className="px-4 py-2.5 text-center">
@@ -69,6 +70,16 @@ export default async function StaffPage() {
                 </td>
                 <td className="px-4 py-2.5 text-xs text-muted-foreground">{formatDate(staff.createdAt)}</td>
                 <td className="px-4 py-2.5 text-right">
+                  <div className="flex justify-end gap-1">
+                  <PinDialog
+                    staff={{
+                      id: staff.id,
+                      name: staff.name,
+                      username: staff.username,
+                      role: staff.role,
+                      active: staff.active,
+                    }}
+                  />
                   <StaffDialog
                     staff={{
                       id: staff.id,
@@ -78,6 +89,7 @@ export default async function StaffPage() {
                       active: staff.active,
                     }}
                   />
+                  </div>
                 </td>
               </tr>
             ))}
@@ -85,7 +97,7 @@ export default async function StaffPage() {
         </table>
       </section>
       <p className="text-[11px] text-muted-foreground">
-        Reset PIN: buka edit pada staf, isi PIN baru, lalu simpan.
+        Tidak ada password. Login memakai ID + PIN. Gunakan tombol PIN untuk mengganti PIN tanpa mengubah data lain.
       </p>
     </div>
   );

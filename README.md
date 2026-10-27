@@ -32,11 +32,15 @@ lalu Next.js. Buka http://localhost:3000.
 Seed lokal berisi menu warkop (ricebowl, sushi, minuman bubuk, camilan,
 tambahan) dengan varian seperti level pedas/less sugar.
 
+Login selalu memakai **ID + PIN**. Tidak ada password. Manajemen dapat
+menambah akun, mengganti ID, mengganti PIN, dan menonaktifkan akun dari menu
+**Staf**.
+
 Akun development (database lokal kosong):
 
 | Username | PIN | Role |
 | --- | --- | --- |
-| `manajemen` | `1234` | manajemen: semua menu |
+| `manajemen` | `1234` | manajemen/admin: semua menu + kelola akun |
 | `kasir` | `5678` | kasir: POS + shift |
 
 PIN production **tidak** ada di repo: diisi lewat `SEED_ADMIN_PIN` /

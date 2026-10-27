@@ -55,7 +55,7 @@ export function UserMenu({
         <span className="hidden pr-1 text-left leading-tight sm:block">
           <span className="block text-[13px]">{name}</span>
           <span className="block text-[10px] tracking-[0.14em] text-muted-foreground uppercase">
-            {role === "admin" ? "Admin" : "Kasir"}
+            {role === "admin" ? "Manajemen" : "Kasir"}
           </span>
         </span>
       </DropdownMenuTrigger>
