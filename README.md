@@ -5,6 +5,7 @@ pelanggan, laporan, dan struk thermal 58/80 mm.
 
 - Web production: https://kedai-senja-pos.vercel.app
 - Repo: https://github.com/begolo12/kedai-senja-pos (publik)
+- APK: https://github.com/begolo12/kedai-senja-pos/releases/latest
 - Rencana: [`docs/PLAN.md`](docs/PLAN.md)
 - Desain: [`docs/DESIGN.md`](docs/DESIGN.md)
 - Printer: [`docs/PRINTER.md`](docs/PRINTER.md)
