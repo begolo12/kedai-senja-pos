@@ -1,4 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  LayoutGrid,
+  ReceiptText,
+  RefreshCw,
+  Settings as SettingsIcon,
+  ShoppingBag,
+  Wifi,
+  WifiOff,
+} from "lucide-react";
 import { getSetting, db, saveSnapshot, clearLocalData, prepareStore } from "./lib/db";
 import { ApiError, sync, type LoginResult } from "./lib/api";
 import { computeTotals, formatMoney, formatTime } from "./lib/money";
@@ -343,25 +352,29 @@ export default function App() {
     <div className="shell">
       <header className="topbar">
         <div className="brand">
-          <span className="eyebrow">{data.settings.storeName}</span>
-          <strong>Kasir</strong>
+          <span className="brand-mark">
+            <ShoppingBag className="size-5" strokeWidth={1.8} />
+          </span>
+          <div className="brand-text">
+            <strong>{data.settings.storeName}</strong>
+            <small>Kasir · {session.user.name.split(" ")[0]}</small>
+          </div>
         </div>
-        <div className="status">
-          <span className={online ? "pill online" : "pill offline"}>
+        <div className="topbar-actions">
+          <span className={online ? "conn online" : "conn offline"}>
+            {online ? <Wifi className="size-3.5" /> : <WifiOff className="size-3.5" />}
             {online ? "Online" : "Offline"}
           </span>
-          <span className="pill">{pending} antre</span>
-          <span className="pill">v{APP_VERSION}</span>
-        </div>
-        <div className="top-actions">
-          <button className="ghost" onClick={() => void openHistory()}>
-            Riwayat
-          </button>
-          <button className="ghost" onClick={() => setView("settings")}>
-            Pengaturan
-          </button>
-          <button className="ghost sync" onClick={() => void syncNow()} disabled={syncing || !online}>
-            {syncing ? "Sinkron…" : "Sinkron"}
+          {pending > 0 ? <span className="queue">{pending}</span> : null}
+          <button
+            type="button"
+            className="icon-btn"
+            onClick={() => void syncNow()}
+            disabled={syncing || !online}
+            aria-label="Sinkronkan sekarang"
+            title="Sinkronkan"
+          >
+            <RefreshCw className={syncing ? "spin" : ""} />
           </button>
         </div>
       </header>
@@ -374,9 +387,7 @@ export default function App() {
       ) : null}
       {update ? (
         <div className="banner">
-          <span>
-            Versi {update.version} tersedia dari GitHub.
-          </span>
+          <span>Versi {update.version} tersedia.</span>
           <button className="primary small" onClick={() => void installUpdate()} disabled={downloading !== null}>
             {downloading === null ? "Unduh & pasang" : `${downloading}%`}
           </button>
@@ -385,7 +396,7 @@ export default function App() {
       {updateError ? <div className="banner error-banner">{updateError}</div> : null}
       {syncError && !expired ? <div className="banner error-banner">{syncError}</div> : null}
 
-      <main className="content">
+      <main className="content with-nav">
         <PosScreen
           products={data.products}
           categories={data.categories}
@@ -398,6 +409,35 @@ export default function App() {
           onCheckout={(method, paid, type, table) => void checkout(method, paid, type, table)}
         />
       </main>
+
+      <nav className="bottom-nav" aria-label="Navigasi utama">
+        <button
+          type="button"
+          className={view === "pos" || view === null ? "active" : ""}
+          onClick={() => setView("pos")}
+        >
+          <LayoutGrid />
+          Kasir
+        </button>
+        <button
+          type="button"
+          className={view === "history" ? "active" : ""}
+          onClick={() => void openHistory()}
+        >
+          <ReceiptText />
+          Riwayat
+          {pending > 0 ? <span className="nav-dot">{pending}</span> : null}
+        </button>
+        <button
+          type="button"
+          className={view === "settings" ? "active" : ""}
+          onClick={() => setView("settings")}
+        >
+          <SettingsIcon />
+          Pengaturan
+          {update ? <span className="nav-dot" /> : null}
+        </button>
+      </nav>
 
       {receipt ? (
         <ReceiptOverlay

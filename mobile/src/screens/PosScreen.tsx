@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
+import { ArrowRight, ShoppingBag } from "lucide-react";
 import { computeTotals, formatMoney, formatNumber, parseMoneyInput } from "../lib/money";
 import type { Category, Product, Settings } from "../lib/types";
 
@@ -168,6 +169,7 @@ export function PosScreen({
         <div className="product-grid">
           {filtered.map((product) => {
             const inCart = cart.find((line) => line.product.id === product.id)?.qty ?? 0;
+            const tone = categories.find((item) => item.id === product.categoryId)?.color;
             return (
               <button
                 key={product.id}
@@ -175,7 +177,11 @@ export function PosScreen({
                 disabled={product.stock <= 0}
                 onClick={() => chooseProduct(product)}
               >
-                <span className="product-name">{product.name}</span>
+                <span className="product-cat" style={{ background: tone ?? "var(--line)" }} />
+                <span className="product-name">
+                  {product.name}
+                  {product.options ? <em className="option-tag">Pilihan</em> : null}
+                </span>
                 <span className="product-bottom">
                   <span>
                     <strong>{formatMoney(product.price)}</strong>
@@ -268,10 +274,21 @@ export function PosScreen({
         </footer>
       </aside>
 
-      <button className="cartbar" onClick={() => setCartOpen(true)}>
-        <span>{count} item</span>
-        <strong>{formatMoney(totals.total)}</strong>
-      </button>
+      {count > 0 ? (
+        <button className="cartbar" onClick={() => setCartOpen(true)}>
+          <span className="cartbar-info">
+            <ShoppingBag />
+            <span>
+              <b>{count} item</b>
+              <small>Lihat pesanan</small>
+            </span>
+          </span>
+          <span className="cartbar-total">
+            {formatMoney(totals.total)}
+            <ArrowRight />
+          </span>
+        </button>
+      ) : null}
 
       {paymentOpen ? (
         <div className="modal-backdrop" onClick={() => setPaymentOpen(false)}>

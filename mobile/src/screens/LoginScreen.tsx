@@ -33,6 +33,10 @@ export function LoginScreen({ onLogin }: { onLogin: (result: LoginResult) => voi
         <p>Tablet kasir. Data tersimpan lokal, tersinkron saat online.</p>
       </div>
       <form className="login-card" onSubmit={submit}>
+        <div className="login-brand">
+          <span>KS</span>
+          <strong>Kasir Senja</strong>
+        </div>
         <span className="eyebrow">Masuk</span>
         <h2>Selamat datang</h2>
         <label>
