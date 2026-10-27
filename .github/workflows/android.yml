@@ -1,0 +1,114 @@
+name: Android APK
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "mobile/**"
+      - ".github/workflows/android.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-apk
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      VERSION: 1.0.${{ github.run_number }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: mobile/pnpm-lock.yaml
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Android SDK packages
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "platform-tools"
+
+      - name: Install mobile dependencies
+        working-directory: mobile
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Set build version
+        working-directory: mobile
+        env:
+          BUILD_VERSION_NAME: ${{ env.VERSION }}
+        run: node scripts/set-version.mjs
+
+      - name: Build web assets
+        working-directory: mobile
+        env:
+          VITE_API_URL: ${{ vars.KASIR_API_URL || 'https://kedai-senja-pos.vercel.app' }}
+          VITE_GITHUB_REPO: ${{ github.repository }}
+        run: pnpm build
+
+      - name: Generate Android project
+        working-directory: mobile
+        run: |
+          npx cap add android
+          BUILD_VERSION_NAME="$VERSION" BUILD_VERSION_CODE="${{ github.run_number }}" node scripts/setup-android.mjs
+          npx cap sync android
+
+      - name: Build release APK
+        working-directory: mobile/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon
+
+      - name: Sign APK
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$KEYSTORE_BASE64"
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.p12"
+          BUILD_TOOLS=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          "$BUILD_TOOLS/zipalign" -f 4 \
+            mobile/android/app/build/outputs/apk/release/app-release-unsigned.apk \
+            "$RUNNER_TEMP/unsigned.apk"
+          "$BUILD_TOOLS/apksigner" sign \
+            --ks "$RUNNER_TEMP/release.p12" \
+            --ks-type PKCS12 \
+            --ks-key-alias kasir \
+            --ks-pass env:KEYSTORE_PASSWORD \
+            --key-pass env:KEYSTORE_PASSWORD \
+            --out "kasir-senja-$VERSION.apk" \
+            "$RUNNER_TEMP/unsigned.apk"
+          "$BUILD_TOOLS/apksigner" verify --print-certs "kasir-senja-$VERSION.apk"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kasir-senja-apk
+          path: kasir-senja-*.apk
+          if-no-files-found: error
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: mobile-v${{ env.VERSION }}
+          name: Kasir Senja ${{ env.VERSION }}
+          body: |
+            APK kasir offline-first. Unduh dan pasang di tablet Android.
+            Aplikasi memeriksa rilis ini untuk pembaruan otomatis.
+          files: kasir-senja-*.apk
+          make_latest: true
