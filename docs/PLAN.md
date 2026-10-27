@@ -1,8 +1,8 @@
 # Rencana Produk — Kedai Senja POS
 
 POS untuk kedai kopi satu lokasi: kasir cepat di meja, kontrol stok yang bisa
-diaudit, dan laporan harian yang bisa dipercaya. Aplikasi berjalan lokal
-(SQLite) tanpa layanan pihak ketiga.
+diaudit, laporan harian, dan tablet kasir offline-first. Web memakai
+PostgreSQL (Neon di production); tablet memakai IndexedDB + sinkronisasi.
 
 Status: **P0 selesai dan terverifikasi** (lihat `docs/DESIGN.md` dan
 `README.md` untuk cara jalan).
@@ -25,20 +25,21 @@ sengaja di luar P0 (lihat §11).
 | --- | --- | --- |
 | Framework | Next.js 16 App Router, React 19, TypeScript | Server Components memuat data langsung dari DB; server actions menghapus lapisan API untuk mutasi; satu proses untuk deploy lokal |
 | UI | Tailwind CSS v4 + shadcn/ui (base-nova, Base UI) | Komponen milik sendiri, aksesibel (fokus, dialog, menu), mudah diubah tanpa override tema pihak ketiga |
-| Data | SQLite (`better-sqlite3`) + Drizzle ORM | POS lokal: nol server DB, transaksi sinkron dan cepat, file tunggal mudah dibackup. Drizzle menjaga jalur migrasi ke Postgres |
+| Data | PostgreSQL + Drizzle ORM | Neon serverless di production, PGlite (Postgres WASM) untuk pengembangan lokal. Transaksi ACID, row lock, dan advisory lock untuk nomor pesanan |
 | Validasi | Zod | Semua input server divalidasi ulang; klien tidak dipercaya |
 | Auth | Username + PIN, scrypt, cookie HMAC HttpOnly | Staf lapangan tidak memakai email; PIN 4–8 digit cukup untuk terminal bersama. Tanpa dependensi auth eksternal |
 | Grafik | Recharts | Cukup untuk tren harian; tidak menarik library chart besar |
 | Test | `node:test` via tsx | Satu file, tanpa framework tambahan |
 
-Tidak dipakai: Prisma (lebih berat untuk SQLite lokal), NextAuth/Clerk (alur
-PIN lebih sederhana), state manager global (server components + `useState`
-cukup), tRPC (server actions sudah typed), Redis (single instance).
+Tidak dipakai: Prisma (Drizzle sudah cukup dan lebih ringan), NextAuth/Clerk
+(alur PIN lebih sederhana), state manager global (server components +
+`useState` cukup), tRPC (server actions sudah typed).
 
-**Jalur upgrade:** PostgreSQL + Drizzle (`drizzle-orm/node-postgres`) dan
-`pg` pool; semua query sudah lewat Drizzle kecuali agregasi laporan yang
-memakai SQL standar. Single-instance SQLite adalah batas yang disengaja,
-bukan kecelakaan.
+**Mobile:** React + Vite + Capacitor + Dexie/IndexedDB. APK dibangun GitHub
+Actions, update dari GitHub Releases. Detail: `docs/MOBILE.md`.
+
+**Deploy:** Vercel (web) + Neon (Postgres). Migrasi dan seed dijalankan
+eksplisit lewat `pnpm db:setup`; tidak ada DDL otomatis di request path.
 
 ## 3. Fitur P0 (semua terimplementasi)
 
@@ -156,7 +157,7 @@ epoch milidetik.
 2. Total pesanan dihitung ulang di server dari `products.price` saat itu.
 3. Diskon ≤ subtotal; pajak dihitung dari subtotal setelah diskon.
 4. `orders.clientId` unik → retry tidak menggandakan transaksi.
-5. Stok dan pesanan ditulis dalam satu transaksi SQLite.
+5. Stok dan pesanan ditulis dalam satu transaksi PostgreSQL; baris produk dikunci `FOR UPDATE`.
 6. Refund hanya sekali; `status` menjadi `refunded`.
 7. Poin didapat disimpan di `orders.pointsEarned`, sehingga refund memakai angka saat transaksi, bukan tarif poin terbaru.
 
@@ -183,7 +184,7 @@ src/
     money.ts dates.ts validation.ts csv.ts settings.ts shifts.ts
   drizzle/            SQL migrasi (dibuat drizzle-kit)
 docs/                 rencana, desain, screenshot
-data/pos.db           database lokal (gitignored)
+.pgdata/              PGlite lokal (gitignored)
 ```
 
 Aturan: halaman server membaca DB langsung; mutasi lewat server actions;
@@ -222,15 +223,18 @@ kotak, garis putus-putus seperti struk.
 - Throttle login 6 percobaan / 5 menit per username (in-memory; lihat §11).
 - Otorisasi diperiksa di setiap action, bukan hanya di UI.
 - CSP/header keamanan belum dipasang (P1), karena deployment awal lokal.
-- Backup: salin `data/pos.db` saat aplikasi berhenti atau gunakan
-  `sqlite3 .backup`. WAL ikut bila menyalin saat berjalan.
+- Backup: Neon PITR/backup otomatis; untuk ekspor manual gunakan
+  `pg_dump` dengan `DATABASE_URL_UNPOOLED`.
 - Database kosong selalu diisi data contoh kedai; ganti PIN staf sebelum
   dipakai nyata dan jangan buka instance demo ke internet.
-- Satu proses Node; SQLite tidak untuk multi-instance.
+- Serverless Vercel + Neon; pool `pg` dibatasi 5 koneksi per instance.
 
 ## 10. Verifikasi yang sudah dijalankan
 
 - `pnpm typecheck`, `pnpm lint`, `pnpm test` (7 test uang/CSV/nomor).
+- PostgreSQL: migrasi Neon, seed production dengan PIN env, health API,
+  login web/mobile, transaksi, refund, laporan, CSV.
+- Android: build APK lewat GitHub Actions, release stabil, update check.
 - Browser nyata: login admin & kasir, buka shift, pindai barcode, draft
   bertahan setelah reload, checkout tunai & QRIS, stok turun, refund admin,
   produk/kategori, penyesuaian stok, pelanggan, staf baru, batas role
@@ -247,11 +251,11 @@ kotak, garis putus-putus seperti struk.
 - Redemption poin (saat ini poin hanya dikumpulkan).
 - Refund sebagian per item.
 - Purchase order / supplier dan stok masuk terjadwal.
-- Cetak langsung ke printer thermal (ESC/POS) tanpa dialog browser.
-- PWA offline + sinkronisasi antrean.
-- Security headers, rate limit lintas instance, audit login gagal.
+- Cetak ESC/POS langsung (USB/Bluetooth) + cash drawer.
+- Audit login gagal lintas instance (Redis/Upstash).
 - Backoffice multi-outlet (tambahkan `outletId` di produk/order/shift).
 - Retur penjualan mempengaruhi kas seharusnya di tutup shift.
+- Sinkron dua arah untuk pelanggan yang dibuat offline.
 
 ### P2 — pertumbuhan
 - Meja & self-order QR.
@@ -263,8 +267,9 @@ kotak, garis putus-putus seperti struk.
 
 - Nomor pesanan berurutan per hari dan bergantung pada zona Asia/Jakarta.
 - Refund tidak mengubah kas seharusnya shift (lihat P1).
-- Throttle login hilang saat proses restart.
-- Tanpa multi-terminal: dua kasir paralel pada file SQLite yang sama tidak
-  dianjurkan untuk produksi.
-- Laporan memakai SQL agregasi SQLite (`date(..., '+7 hours')`).
+- Throttle login hilang saat cold start serverless.
+- Laporan memakai SQL agregasi PostgreSQL (`to_char(... AT TIME ZONE)`).
+- Penjualan offline dapat menyebabkan oversell; stok dikoreksi manual.
 - Data pelanggan tidak memiliki alamat; cukup untuk loyalitas dasar.
+- APK memakai signing key di GitHub Secrets; update hanya dari repo publik.
+- Cetak thermal lewat print service OS/Android, bukan ESC/POS mentah.

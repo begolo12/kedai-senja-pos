@@ -39,9 +39,9 @@ jobs:
           java-version: "21"
 
       - uses: android-actions/setup-android@v3
-
-      - name: Android SDK packages
-        run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "platform-tools"
+        with:
+          packages: "platform-tools platforms;android-36 build-tools;36.0.0"
+          accept-android-sdk-licenses: true
 
       - name: Install mobile dependencies
         working-directory: mobile

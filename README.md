@@ -1,97 +1,107 @@
 # Kedai Senja POS
 
-Point of sale lokal untuk kedai: kasir cepat, shift & laci, stok yang bisa
-diaudit, pelanggan berpoin, dan laporan harian. Satu proses Next.js, satu
-file SQLite. Tanpa layanan eksternal.
+POS untuk kedai: kasir web, aplikasi Android offline-first, stok, shift,
+pelanggan, laporan, dan struk thermal 58/80 mm.
 
-- Rencana produk lengkap: [`docs/PLAN.md`](docs/PLAN.md)
-- Arah desain & token: [`docs/DESIGN.md`](docs/DESIGN.md)
+- Web production: https://kedai-senja-pos.vercel.app
+- Repo: https://github.com/begolo12/kedai-senja-pos (publik)
+- Rencana: [`docs/PLAN.md`](docs/PLAN.md)
+- Desain: [`docs/DESIGN.md`](docs/DESIGN.md)
+- Printer: [`docs/PRINTER.md`](docs/PRINTER.md)
+- Android/offline: [`docs/MOBILE.md`](docs/MOBILE.md)
 
-## Jalankan
+## Stack
+
+Next.js 16 App Router + React 19 + TypeScript, shadcn/ui, Tailwind v4,
+PostgreSQL (Neon di production, PGlite untuk lokal) + Drizzle ORM, Zod,
+auth PIN scrypt + cookie/bearer HMAC. Tablet memakai React + Capacitor +
+IndexedDB (Dexie), APK dibangun di GitHub Actions.
+
+## Jalankan lokal
 
 ```bash
 pnpm install
 pnpm dev
 ```
 
-Buka http://localhost:3000. Database dibuat otomatis di `data/pos.db`,
-migrasi dijalankan saat start, dan data contoh (14 hari penjualan, 24 produk)
-diisi bila database masih kosong.
+`pnpm dev` menjalankan PGlite (Postgres lokal, port 5433), migrasi, seed,
+lalu Next.js. Buka http://localhost:3000.
 
-**Akun contoh**
+Akun development (database lokal kosong):
 
 | Username | PIN | Role |
 | --- | --- | --- |
-| `rani` | `1234` | admin |
-| `bima` | `5678` | kasir |
+| `manajemen` | `1234` | manajemen: semua menu |
+| `kasir` | `5678` | kasir: POS + shift |
 
-Buka **Shift** dulu sebelum transaksi pertama.
+PIN production **tidak** ada di repo: diisi lewat `SEED_ADMIN_PIN` /
+`SEED_CASHIER_PIN` saat seed dan disimpan sebagai secret Vercel.
 
 ## Perintah
 
 | Perintah | Fungsi |
 | --- | --- |
-| `pnpm dev` | Server pengembangan |
+| `pnpm dev` | PGlite + migrasi + seed + Next dev |
 | `pnpm build` / `pnpm start` | Build & jalankan produksi |
-| `pnpm lint` | ESLint |
-| `pnpm typecheck` | TypeScript |
-| `pnpm test` | Test uang, nomor pesanan, CSV |
-| `pnpm db:generate` | Buat migrasi Drizzle setelah ubah schema |
-| `pnpm db:reset` | Hapus database lokal (seed ulang saat start) |
+| `pnpm db:setup` | Migrasi + seed database dari `DATABASE_URL` |
+| `pnpm db:generate` | Buat migrasi Drizzle |
+| `pnpm db:reset` | Hapus PGlite lokal (jalankan ulang `pnpm dev`) |
+| `pnpm test` / `pnpm lint` / `pnpm typecheck` | Uji & kualitas |
+| `cd mobile && pnpm dev` | UI tablet di browser |
+| `cd mobile && pnpm build` | Bundle web untuk Capacitor |
 
-## Konfigurasi
+## Deploy
 
-Salin `.env.example` menjadi `.env.local` untuk produksi:
-
-```
-AUTH_SECRET=string-acak-minimal-32-karakter
-# DATABASE_PATH=./data/pos.db
-# COOKIE_SECURE=0   # hanya untuk LAN HTTP tepercaya
-```
-
-- `AUTH_SECRET` wajib di production; tanpa itu aplikasi menolak membuat sesi.
-- Cookie sesi `Secure` di production. Bila terminal diakses lewat HTTP di LAN
-  tepercaya, set `COOKIE_SECURE=0`; untuk akses jaringan sebaiknya tetap HTTPS.
-- Database memakai WAL. Backup saat aplikasi berhenti, atau gunakan
-  `sqlite3 data/pos.db ".backup backup.db"`.
-- Database kosong selalu diisi data contoh kedai (termasuk akun demo).
-  Ganti PIN staf sebelum dipakai nyata, dan jangan buka instance demo ke internet.
-
-## Fitur
-
-- **Kasir** — filter kategori, cari/pindai barcode, draft keranjang tahan
-  refresh, diskon persen/nominal, pajak, tunai/QRIS/kartu, kembalian, struk
-  80 mm.
-- **Shift** — kas awal, penjualan tunai, kas seharusnya, tutup shift dengan
-  selisih, riwayat.
-- **Pesanan** — filter, detail, cetak ulang, refund admin (stok & poin
-  kembali).
-- **Produk & kategori** — CRUD, margin, aktif/nonaktif.
-- **Stok** — penyesuaian beralasan + jejak audit.
-- **Pelanggan** — poin otomatis, total belanja.
-- **Laporan** — rentang tanggal, tren, metode bayar, kategori, produk,
-  kasir, ekspor CSV.
-- **Staf & pengaturan** — role admin/kasir, PIN, identitas toko, pajak, poin.
-
-## Struktur
+Production memakai Vercel + Neon. Environment yang wajib:
 
 ```
-src/app/(app)      halaman setelah login
-src/app/login      layar masuk
-src/app/receipt    struk cetak
-src/lib/db         schema, koneksi, migrasi, seed
-src/lib/actions    server actions (validasi + otorisasi)
-src/components/ui  shadcn/ui
-docs               rencana, desain, screenshot
+DATABASE_URL=postgresql://...neon.tech/...?sslmode=require
+AUTH_SECRET=<acak ≥32 karakter>
+SEED_ADMIN_PIN=<4–8 digit>
+SEED_CASHIER_PIN=<4–8 digit>
 ```
 
-## Catatan operasional
+Seed hanya dijalankan eksplisit, tidak otomatis di runtime:
 
-- Uang disimpan sebagai integer minor unit; semua total dihitung ulang di
-  server. Klien tidak pernah mengirim harga.
-- Satu shift terbuka per kasir; checkout ditolak tanpa shift.
-- Aplikasi ini untuk satu terminal/satu file SQLite. Untuk beberapa terminal
-  paralel, pindahkan data ke Postgres (Drizzle) sebelum menambah instance.
-- Refund P0 mengembalikan stok dan poin, tetapi belum mengurangi “kas
-  seharusnya” pada shift; catat di note shift bila ada uang keluar.
-- Rate limit login bersifat per proses dan hilang saat restart.
+```bash
+DATABASE_URL="..." SEED_ADMIN_PIN="..." SEED_CASHIER_PIN="..." NODE_ENV=production pnpm db:setup
+```
+
+Neon/Vercel menyediakan `DATABASE_URL` lewat integrasi. Jangan commit nilai
+apa pun; `.env.local` sudah di-ignore.
+
+## Role
+
+| Menu | Manajemen | Kasir |
+| --- | --- | --- |
+| Kasir, Shift | ✓ | ✓ |
+| Pesanan, Produk, Stok, Pelanggan, Laporan, Staf, Pengaturan | ✓ | — |
+| Refund, ubah harga/pajak/staf | ✓ | — |
+| Struk | semua | hanya transaksi sendiri |
+
+Kasir hanya melihat POS dan shift. Request langsung ke halaman manajemen
+dialihkan ke POS; receipt milik kasir lain → 404.
+
+## Android
+
+Workflow GitHub Actions membangun APK setiap `mobile/**` berubah dan
+menerbitkan GitHub Release `mobile-v1.0.<run>`. Aplikasi memeriksa release
+terbaru dan menyediakan tombol **Unduh & pasang**. APK ditandatangani
+dengan keystore yang hanya ada di GitHub Secrets.
+
+Fitur tablet: login, katalog offline, jual offline, antrean sinkron,
+riwayat, cetak thermal, update.
+
+## Keamanan
+
+- Tidak ada kredensial, keystore, `DATABASE_URL`, atau PIN production di
+  repo publik.
+- PIN scrypt; sesi web HttpOnly/SameSite; token mobile HMAC 90 hari.
+- Semua total dihitung ulang di server; order offline idempoten `clientId`.
+- CORS mobile dibatasi ke origin Capacitor; security headers + CSP aktif.
+- Login dibatasi percobaan; API mobile `no-store`.
+- Neon TLS; backup mengandalkan Neon PITR.
+
+Batas yang diketahui: refund belum mengurangi kas seharusnya shift; printer
+memakai Android Print Framework/browser (bukan ESC/POS mentah); penjualan
+offline dapat membuat stok server negatif (oversell) dan perlu koreksi stok.
