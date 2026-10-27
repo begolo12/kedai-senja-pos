@@ -38,7 +38,7 @@ menambah akun, mengganti ID, mengganti PIN, dan menonaktifkan akun dari menu
 
 Akun development (database lokal kosong):
 
-| Username | PIN | Role |
+| ID Login | PIN | Akses |
 | --- | --- | --- |
 | `manajemen` | `1234` | manajemen/admin: semua menu + kelola akun |
 | `kasir` | `5678` | kasir: POS + shift |

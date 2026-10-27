@@ -43,7 +43,7 @@ export default async function StaffPage() {
           <thead>
             <tr className="border-b border-border text-left text-[10px] tracking-[0.12em] text-muted-foreground uppercase">
               <th className="px-4 py-2.5 font-medium">Nama</th>
-              <th className="px-4 py-2.5 font-medium">Username</th>
+              <th className="px-4 py-2.5 font-medium">ID Login</th>
               <th className="px-4 py-2.5 font-medium">Role</th>
               <th className="px-4 py-2.5 text-center font-medium">Aktif</th>
               <th className="px-4 py-2.5 font-medium">Dibuat</th>
