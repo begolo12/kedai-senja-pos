@@ -154,3 +154,21 @@ Chart memakai animasi bawaan Recharts; tidak ada animasi dekoratif lain.
   screenshot tersimpan, dan lint visual otomatis.
 - Layar 200% zoom belum diuji terpisah; layout memakai satuan rem dan tidak
   mengunci tinggi teks.
+## 9. Tablet & APK
+
+Aplikasi Android memakai bahasa visual yang sama dalam ukuran sentuh:
+topbar tinta dengan status online/offline/antrean, katalog dua–empat kolom,
+tiket sebagai panel kanan di tablet dan bottom-sheet di ponsel, tombol bayar
+selebar panel.
+
+State khusus offline:
+- pill **Online/Offline** dan jumlah antrean selalu terlihat;
+- pesanan lokal diberi cap **pending**, setelah sinkron menjadi nomor server;
+- pesanan ditolak tampil dengan alasan di riwayat;
+- banner pembaruan GitHub muncul di atas katalog dengan tombol unduh;
+- cetak struk tetap tersedia saat offline.
+
+Printer memakai lebar 58/80 mm dari Pengaturan; struk Android dikirim ke
+Android Print Framework, struk web ke dialog cetak browser.
+
+Bukti tablet: `docs/screens/mobile-pos.webp`.
