@@ -496,7 +496,6 @@ h2 {
   font-size: 12px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  bottom: 12px;
 }
 
 .cartbar strong {
@@ -614,6 +613,10 @@ h2 {
 
 .history-row .right {
   text-align: right;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
 }
 
 .history-row .right strong {
@@ -1637,4 +1640,19 @@ h2 {
   place-items: center;
   width: 34px;
   color: var(--ink, #2a2622);
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(76px + env(safe-area-inset-bottom));
+  z-index: 50;
+  background: var(--ink);
+  color: var(--paper);
+  padding: 10px 16px;
+  border-radius: var(--radius);
+  font-size: 12px;
+  box-shadow: 0 8px 24px rgba(28, 26, 23, 0.25);
+  pointer-events: none;
 }

@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { App as CapApp } from "@capacitor/app";
+import { Capacitor } from "@capacitor/core";
 import {
   LayoutGrid,
   ReceiptText,
@@ -34,7 +36,7 @@ import type {
 } from "./lib/types";
 import { LoginScreen } from "./screens/LoginScreen";
 import { StorePicker } from "./screens/StorePicker";
-import { PosScreen, type CartLine, type CheckoutInput, type ParkedTicket } from "./screens/PosScreen";
+import { PosScreen, type CartLine, type CheckoutInput, type ParkedTicket, type PosScreenHandle } from "./screens/PosScreen";
 
 type LocalData = {
   settings: Settings;
@@ -97,6 +99,8 @@ export default function App() {
   const [downloading, setDownloading] = useState<number | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
   const syncLock = useRef(false);
+  const posRef = useRef<PosScreenHandle>(null);
+  const [exitHint, setExitHint] = useState(false);
 
   const refreshCounts = useCallback(async () => {
     const [pendingOrders, last] = await Promise.all([
@@ -106,6 +110,48 @@ export default function App() {
     setPending(pendingOrders);
     setLastSync(last?.value ?? null);
   }, []);
+
+  // Tombol back Android: tutup dialog/overlay teratas dulu,
+  // baru keluar aplikasi dengan pola tekan-dua-kali.
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    const listener = CapApp.addListener("backButton", () => {
+      if (posRef.current?.closeTopDialog()) {
+        setExitHint(false);
+        return;
+      }
+      if (receipt) {
+        setReceipt(null);
+        setExitHint(false);
+        return;
+      }
+      if (view === "history" || view === "settings") {
+        setView("pos");
+        setExitHint(false);
+        return;
+      }
+      if (pendingLogin) {
+        setPendingLogin(null);
+        setExitHint(false);
+        return;
+      }
+      if (exitHint) {
+        CapApp.exitApp();
+        return;
+      }
+      setExitHint(true);
+    });
+    return () => {
+      void listener.then((handle) => handle.remove());
+    };
+  }, [receipt, view, pendingLogin, exitHint]);
+
+  // Hint keluar otomatis hilang setelah 2 detik.
+  useEffect(() => {
+    if (!exitHint) return;
+    const timer = setTimeout(() => setExitHint(false), 2000);
+    return () => clearTimeout(timer);
+  }, [exitHint]);
 
   const syncNow = useCallback(
     async (activeSession?: Session) => {
@@ -497,6 +543,7 @@ export default function App() {
       <main className="content with-nav">
         <PosScreen
           key={restoreKey}
+          ref={posRef}
           restore={
             restore
               ? {
@@ -584,7 +631,7 @@ export default function App() {
       ) : null}
 
       {view === "history" ? (
-        <HistoryOverlay orders={orders} onClose={() => setView("pos")} />
+        <HistoryOverlay orders={orders} settings={data.settings} onClose={() => setView("pos")} />
       ) : null}
 
       {view === "settings" ? (
@@ -609,6 +656,12 @@ export default function App() {
           onLogout={() => void logout()}
           onClose={() => setView("pos")}
         />
+      ) : null}
+
+      {exitHint ? (
+        <div className="toast" role="status">
+          Tekan sekali lagi untuk keluar
+        </div>
       ) : null}
     </div>
   );
@@ -661,7 +714,15 @@ function ReceiptOverlay({
   );
 }
 
-function HistoryOverlay({ orders, onClose }: { orders: PendingOrder[]; onClose: () => void }) {
+function HistoryOverlay({
+  orders,
+  settings,
+  onClose,
+}: {
+  orders: PendingOrder[];
+  settings: Settings;
+  onClose: () => void;
+}) {
   return (
     <div className="sheet-backdrop" onClick={onClose}>
       <div className="sheet" onClick={(event) => event.stopPropagation()}>
@@ -681,6 +742,12 @@ function HistoryOverlay({ orders, onClose }: { orders: PendingOrder[]; onClose: 
               <div className="right">
                 <strong>{formatMoney(order.total)}</strong>
                 <span className={`stamp ${order.status}`}>{order.status}</span>
+                <button
+                  className="primary small"
+                  onClick={() => void printOrder(order, settings)}
+                >
+                  Cetak
+                </button>
               </div>
             </div>
           ))}

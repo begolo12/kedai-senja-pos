@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { ArrowRight, Pause, ScanLine, ShoppingBag, TicketPercent, X } from "lucide-react";
 import { computeTotals, formatMoney, formatNumber, parseMoneyInput } from "../lib/money";
@@ -30,6 +30,10 @@ export type ParkedTicket = {
   createdAt: number;
 };
 
+export type PosScreenHandle = {
+  closeTopDialog: () => boolean;
+};
+
 export function PosScreen({
   products,
   categories,
@@ -48,6 +52,7 @@ export function PosScreen({
   onDiscardParked,
   onCreateCustomer,
   restore,
+  ref,
 }: {
   products: Product[];
   categories: Category[];
@@ -72,6 +77,7 @@ export function PosScreen({
     voucherCode: string | null;
     pointsRedeem: number;
   };
+  ref?: Ref<PosScreenHandle>;
 }) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<number | "all">("all");
@@ -106,6 +112,46 @@ export function PosScreen({
   const searchRef = useRef<HTMLInputElement>(null);
 
   const customer = customers.find((entry) => entry.id === customerId) ?? null;
+
+  // Ditutup satu per satu oleh tombol back Android (via App.tsx).
+  const closeTopDialog = (): boolean => {
+    if (paymentOpen) {
+      setPaymentOpen(false);
+      return true;
+    }
+    if (optionProduct) {
+      setOptionProduct(null);
+      setOptionChoice("");
+      setOptionNote("");
+      return true;
+    }
+    if (scanOpen) {
+      setScanOpen(false);
+      return true;
+    }
+    if (customerOpen) {
+      setCustomerOpen(false);
+      return true;
+    }
+    if (parkOpen) {
+      setParkOpen(false);
+      return true;
+    }
+    if (cartOpen) {
+      setCartOpen(false);
+      return true;
+    }
+    return false;
+  };
+
+  useImperativeHandle(ref, () => ({ closeTopDialog }), [
+    paymentOpen,
+    optionProduct,
+    scanOpen,
+    customerOpen,
+    parkOpen,
+    cartOpen,
+  ]);
 
   // Id lokal negatif yang sudah terunggah: alihkan pilihan ke id server
   // supaya nama pelanggan tetap tampil setelah sinkron.
@@ -528,7 +574,7 @@ export function PosScreen({
             />
             {maxRedeemPoints > 0 ? (
               <button className="ghost" onClick={() => setPointsInput(String(maxRedeemPoints))}>
-                maks
+                Maks
               </button>
             ) : null}
           </div>
@@ -621,7 +667,7 @@ export function PosScreen({
                 ) : (
                   <p className="hint">QRIS belum diatur di Pengaturan.</p>
                 )}
-                <p className="hint">Pindai dengan QR Anda, lalu konfirmasi setelah berhasil.</p>
+                <p className="hint">Pindai QRIS dengan aplikasi pembayaran, lalu konfirmasi.</p>
               </div>
             ) : (
               <p className="hint">Konfirmasi setelah pembayaran kartu diterima.</p>
