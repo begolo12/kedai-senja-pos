@@ -5,12 +5,17 @@ manajemen membuka semua toko; kasir hanya toko yang ditugaskan. Kasir web,
 aplikasi Android offline-first, varian menu, dine-in/bungkus, meja, QRIS,
 stok, shift, laporan per toko, dan struk thermal 58/80 mm. Semua tertera.
 
-Fitur unggulan: tukar poin loyalitas saat checkout, voucher promo berperiode
-dengan kuota (kuota kembali saat refund), pembayaran campuran (split tunai +
-QRIS/kartu), refund parsial per item, tunda tiket (parkir pesanan), purchase
-order ke supplier (stok masuk otomatis saat diterima), struk digital via
-WhatsApp, cetak ESC/POS langsung lewat Bluetooth + buka laci tunai, laporan
-jam sibuk per jam, nomor struk harian `TRA-YYMMDD-NNN`, dan prefix struk baru.
+Fitur unggulan: tukar poin loyalitas dengan **membership tier** (kelipatan
+poin otomatis dari total belanja), voucher promo berperiode dengan kuota
+(kuota kembali saat refund), pembayaran campuran (split tunai + QRIS/kartu),
+refund parsial per item, **meja dengan tagihan bayar-nanti + pindah/gabung
++ QR self-order pelanggan**, layar dapur (KDS) dengan status pesanan,
+purchase order ke supplier (stok masuk otomatis saat diterima), **resep
+bahan baku (BOM)** — produk komposit memotong stok bahannya, struk digital
+via WhatsApp, cetak ESC/POS langsung lewat Bluetooth/USB + buka laci tunai,
+**QRIS dinamis** (nominal tertanam otomatis), label barcode siap cetak,
+katalog publik `/menu/[kode-toko]`, laporan jam sibuk per jam, nomor struk
+harian `TRA-YYMMDD-NNN`.
 
 - Web production: https://kedai-senja-pos.vercel.app
 - Repo: https://github.com/begolo12/kedai-senja-pos (publik)
@@ -125,8 +130,9 @@ apa pun; `.env.local` sudah di-ignore.
 
 | Menu | Manajemen | Kasir |
 | --- | --- | --- |
-| Kasir, Shift | ✓ | ✓ |
+| Kasir, Shift, Dapur (KDS) | ✓ | ✓ |
 | Pesanan, Produk, Stok, Pelanggan, Laporan, Staf, Pengaturan | ✓ | — |
+| Meja (tagihan, pindah/gabung), Membership, Pembelian, Promo, Toko | ✓ | — |
 | Refund, ubah harga/pajak/staf | ✓ | — |
 | Struk | semua | hanya transaksi sendiri |
 

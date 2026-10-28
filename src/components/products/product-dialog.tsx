@@ -32,6 +32,7 @@ export type ProductFormValues = {
   unit: string;
   options: string;
   active: boolean;
+  recipe?: { productId: number; qty: number }[];
 };
 
 const BLANK: ProductFormValues = {
@@ -46,18 +47,27 @@ const BLANK: ProductFormValues = {
   unit: "pcs",
   options: "",
   active: true,
+  recipe: [],
 };
 
 export function ProductDialog({
   product,
   categories,
+  products,
 }: {
   product?: ProductFormValues;
   categories: { id: number; name: string }[];
+  products: { id: number; name: string; unit: string }[];
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [values, setValues] = useState<ProductFormValues>(product ?? BLANK);
+  const [recipeRows, setRecipeRows] = useState<{ productId: string; qtyInput: string }[]>(
+    (product?.recipe ?? []).map((row) => ({
+      productId: String(row.productId),
+      qtyInput: String(row.qty),
+    })),
+  );
   const [price, setPrice] = useState(String(Math.round((product?.price ?? 0) / 100)));
   const [cost, setCost] = useState(String(Math.round((product?.cost ?? 0) / 100)));
   const [error, setError] = useState<string | null>(null);
@@ -71,6 +81,12 @@ export function ProductDialog({
   function submit(event: React.FormEvent) {
     event.preventDefault();
     setError(null);
+    const recipe = recipeRows
+      .filter((row) => row.productId !== "" && Number(row.qtyInput.replace(/\D/g, "") || 0) > 0)
+      .map((row) => ({
+        productId: Number(row.productId),
+        qty: Number(row.qtyInput.replace(/\D/g, "") || 0),
+      }));
     startTransition(async () => {
       const result = await saveProductAction({
         id: product?.id,
@@ -84,6 +100,7 @@ export function ProductDialog({
         lowStockAt: values.lowStockAt,
         unit: values.unit,
         options: values.options,
+        recipe,
         active: values.active,
       });
       if (!result.ok) {
@@ -96,6 +113,7 @@ export function ProductDialog({
         setValues(BLANK);
         setPrice("0");
         setCost("0");
+        setRecipeRows([]);
       }
       router.refresh();
     });
@@ -209,6 +227,77 @@ export function ProductDialog({
               <Checkbox checked={values.active} onCheckedChange={(checked) => field("active", Boolean(checked))} />
               Dijual di kasir
             </label>
+          </div>
+
+          <div className="space-y-1.5 border-t border-dashed pt-3">
+            <Label className="text-[10px] tracking-[0.12em] text-muted-foreground uppercase">
+              Resep / bahan (opsional)
+            </Label>
+            {recipeRows.map((row, index) => {
+              const ingredient = products.find((entry) => String(entry.id) === row.productId);
+              return (
+                <div key={index} className="flex items-center gap-1.5">
+                  <select
+                    value={row.productId}
+                    onChange={(event) =>
+                      setRecipeRows((prev) =>
+                        prev.map((item, i) =>
+                          i === index ? { ...item, productId: event.target.value } : item,
+                        ),
+                      )
+                    }
+                    aria-label="Bahan"
+                    className="h-8 min-w-36 flex-1 border border-input bg-transparent px-2 text-sm outline-none focus:ring-2 focus:ring-ring/40"
+                  >
+                    <option value="">Pilih bahan…</option>
+                    {products
+                      .filter((entry) => entry.id !== product?.id)
+                      .map((entry) => (
+                        <option key={entry.id} value={entry.id}>
+                          {entry.name}
+                        </option>
+                      ))}
+                  </select>
+                  <Input
+                    value={row.qtyInput}
+                    onChange={(event) =>
+                      setRecipeRows((prev) =>
+                        prev.map((item, i) =>
+                          i === index
+                            ? { ...item, qtyInput: event.target.value.replace(/[^\d]/g, "") }
+                            : item,
+                        ),
+                      )
+                    }
+                    inputMode="numeric"
+                    aria-label="Jumlah bahan"
+                    className="h-8 w-16 rounded-none border-border text-right font-mono text-xs"
+                  />
+                  <span className="font-mono text-[10px] text-muted-foreground">
+                    {ingredient?.unit ?? "pcs"}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label="Hapus bahan"
+                    onClick={() => setRecipeRows((prev) => prev.filter((_, i) => i !== index))}
+                    className="text-muted-foreground hover:text-destructive"
+                  >
+                    ×
+                  </button>
+                </div>
+              );
+            })}
+            <button
+              type="button"
+              onClick={() => setRecipeRows((prev) => [...prev, { productId: "", qtyInput: "1" }])}
+              className="text-[11px] text-muted-foreground underline underline-offset-4 hover:text-foreground"
+            >
+              + Tambah bahan
+            </button>
+            <p className="text-[11px] text-muted-foreground">
+              Produk berresep memotong stok bahannya saat terjual, bukan stok produknya
+              sendiri; refund mengembalikan bahan yang sama.
+            </p>
           </div>
 
           {error ? (

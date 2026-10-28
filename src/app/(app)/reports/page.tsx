@@ -46,7 +46,7 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
            coalesce(sum(discount_amount), 0) as discount,
            count(*) as orders
     from orders
-    where store_id = ${store.id} and status <> 'refunded' and created_at >= ${new Date(start)} and created_at < ${new Date(end)}
+    where store_id = ${store.id} and status in ('completed','partially_refunded') and created_at >= ${new Date(start)} and created_at < ${new Date(end)}
   `))[0];
 
   const refunds = (await rows<{ count: number; value: number }>(sql`
@@ -60,7 +60,7 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
            coalesce(sum(total - refunded_total), 0) as revenue,
            count(*) as orders
     from orders
-    where store_id = ${store.id} and status <> 'refunded' and created_at >= ${new Date(start)} and created_at < ${new Date(end)}
+    where store_id = ${store.id} and status in ('completed','partially_refunded') and created_at >= ${new Date(start)} and created_at < ${new Date(end)}
     group by 1
     order by 1
   `);
@@ -86,7 +86,7 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
            count(distinct o.id) as orders
     from order_payments op
     join orders o on o.id = op.order_id
-    where o.store_id = ${store.id} and o.status <> 'refunded' and o.created_at >= ${new Date(start)} and o.created_at < ${new Date(end)}
+    where o.store_id = ${store.id} and o.status in ('completed','partially_refunded') and o.created_at >= ${new Date(start)} and o.created_at < ${new Date(end)}
     group by op.method
     order by revenue desc
   `);
@@ -98,7 +98,7 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
            sum((oi.qty - oi.refunded_qty) * (oi.unit_price - oi.cost)) as margin
     from order_items oi
     join orders o on o.id = oi.order_id
-    where o.store_id = ${store.id} and o.status <> 'refunded' and o.created_at >= ${new Date(start)} and o.created_at < ${new Date(end)}
+    where o.store_id = ${store.id} and o.status in ('completed','partially_refunded') and o.created_at >= ${new Date(start)} and o.created_at < ${new Date(end)}
     group by oi.name
     order by sum(oi.qty - oi.refunded_qty) desc
     limit 8
@@ -108,7 +108,7 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
     select u.name as name, count(*) as orders, coalesce(sum(o.total - o.refunded_total), 0) as revenue
     from orders o
     join users u on u.id = o.user_id
-    where o.store_id = ${store.id} and o.status <> 'refunded' and o.created_at >= ${new Date(start)} and o.created_at < ${new Date(end)}
+    where o.store_id = ${store.id} and o.status in ('completed','partially_refunded') and o.created_at >= ${new Date(start)} and o.created_at < ${new Date(end)}
     group by u.name
     order by revenue desc
   `);
@@ -121,7 +121,7 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
     join orders o on o.id = oi.order_id
     left join products p on p.id = oi.product_id
     left join categories c on c.id = p.category_id
-    where o.store_id = ${store.id} and o.status <> 'refunded' and o.created_at >= ${new Date(start)} and o.created_at < ${new Date(end)}
+    where o.store_id = ${store.id} and o.status in ('completed','partially_refunded') and o.created_at >= ${new Date(start)} and o.created_at < ${new Date(end)}
     group by c.name
     order by revenue desc
   `);
@@ -131,7 +131,7 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
            coalesce(sum(total - refunded_total), 0) as revenue,
            count(*) as orders
     from orders
-    where store_id = ${store.id} and status <> 'refunded' and created_at >= ${new Date(start)} and created_at < ${new Date(end)}
+    where store_id = ${store.id} and status in ('completed','partially_refunded') and created_at >= ${new Date(start)} and created_at < ${new Date(end)}
     group by 1
     order by 1
   `);

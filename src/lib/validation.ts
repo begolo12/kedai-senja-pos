@@ -25,6 +25,15 @@ export const productSchema = z.object({
   lowStockAt: z.number().int().min(0).max(9999),
   unit: z.string().trim().min(1).max(12),
   options: z.string().trim().max(300).optional().or(z.literal("")),
+  recipe: z
+    .array(
+      z.object({
+        productId: z.number().int().positive(),
+        qty: z.number().int().min(1, "Jumlah bahan minimal 1.").max(1000),
+      }),
+    )
+    .max(30)
+    .default([]),
   active: z.boolean(),
 });
 
@@ -125,6 +134,22 @@ export const voucherSchema = z.object({
   usageLimit: z.number().int().min(0).max(1_000_000),
   active: z.boolean(),
 });
+export const tierSchema = z.object({
+  id: z.number().int().positive().optional(),
+  name: z.string().trim().min(2, "Nama tier minimal 2 karakter.").max(40),
+  minTotalSpent: z.number().int().min(0),
+  pointsMultiplier: z.number().int().min(50).max(1000),
+  perks: z.string().trim().max(200).optional().or(z.literal("")),
+  active: z.boolean(),
+});
+
+export const tableSchema = z.object({
+  id: z.number().int().positive().optional(),
+  name: z.string().trim().min(1, "Nama meja wajib.").max(20),
+  seats: z.number().int().min(1).max(50),
+  active: z.boolean(),
+});
+
 export const supplierSchema = z.object({
   id: z.number().int().positive().optional(),
   name: z.string().trim().min(2, "Nama supplier minimal 2 karakter.").max(80),

@@ -56,7 +56,7 @@ export default async function OrderDetailPage({ params }: PageProps<"/orders/[id
       <PageHeader
         eyebrow={formatDateTime(order.createdAt)}
         title={order.number}
-        description={`${row.cashier} · Shift ${row.shiftId ?? "—"} · ${order.paymentMethod.toUpperCase()}`}
+        description={`${row.cashier} · Shift ${row.shiftId ?? "—"} · ${(order.paymentMethod ?? "tagihan").toUpperCase()}`}
         actions={
           <>
             <Button nativeButton={false} variant="outline" render={<Link href={`/receipt/${order.id}`} />}>
@@ -168,8 +168,14 @@ export default async function OrderDetailPage({ params }: PageProps<"/orders/[id
               <dt>Total</dt>
               <dd className="font-mono text-lg tabular">{formatMoney(order.total, settings.currency)}</dd>
             </div>
-            <Row label="Dibayar" value={formatMoney(order.amountPaid, settings.currency)} />
-            <Row label="Kembalian" value={formatMoney(order.changeDue, settings.currency)} />
+            {order.status === "open" ? (
+              <Row label="Pembayaran" value="Belum dibayar (tagihan meja)" />
+            ) : (
+              <>
+                <Row label="Dibayar" value={formatMoney(order.amountPaid ?? 0, settings.currency)} />
+                <Row label="Kembalian" value={formatMoney(order.changeDue, settings.currency)} />
+              </>
+            )}
             {order.refundedTotal > 0 ? (
               <Row
                 label="Dikembalikan"
@@ -213,7 +219,17 @@ export default async function OrderDetailPage({ params }: PageProps<"/orders/[id
               </div>
               <div className="flex justify-between">
                 <dt className="text-muted-foreground">Metode</dt>
-                <dd className="uppercase">{order.paymentMethod}</dd>
+                <dd className="uppercase">{order.paymentMethod ?? "tagihan"}</dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-muted-foreground">Dapur</dt>
+                <dd>
+                  {order.kitchenStatus === "preparing"
+                    ? "Diproses"
+                    : order.kitchenStatus === "ready"
+                      ? "Siap diangkat"
+                      : "Sudah diangkat"}
+                </dd>
               </div>
               <div className="flex justify-between">
                 <dt className="text-muted-foreground">Modal terjual</dt>

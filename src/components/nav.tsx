@@ -5,7 +5,9 @@ import { usePathname } from "next/navigation";
 import {
   Boxes,
   ChartNoAxesColumn,
+  ChefHat,
   Clock,
+  Crown,
   Package,
   ReceiptText,
   Settings,
@@ -20,6 +22,7 @@ import { cn } from "@/lib/utils";
 
 const NAV = [
   { href: "/pos", label: "Kasir", icon: ShoppingBasket },
+  { href: "/kds", label: "Dapur", icon: ChefHat },
   { href: "/orders", label: "Pesanan", icon: ReceiptText },
   { href: "/products", label: "Produk", icon: Package },
   { href: "/inventory", label: "Stok", icon: Boxes },
@@ -30,7 +33,9 @@ const NAV = [
 
 const ADMIN_ONLY_NAV = [
   { href: "/vouchers", label: "Promo", icon: TicketPercent },
+  { href: "/tiers", label: "Membership", icon: Crown },
   { href: "/purchases", label: "Pembelian", icon: Truck },
+  { href: "/tables", label: "Meja", icon: Store },
   { href: "/stores", label: "Toko", icon: Store },
   { href: "/staff", label: "Staf", icon: UserRoundCog },
   { href: "/settings", label: "Pengaturan", icon: Settings },
@@ -45,7 +50,11 @@ export function SidebarNav({
 }) {
   const pathname = usePathname();
   const items =
-    role === "admin" ? [...NAV, ...ADMIN_ONLY_NAV] : NAV.filter((item) => item.href === "/pos" || item.href === "/shift");
+    role === "admin"
+      ? [...NAV, ...ADMIN_ONLY_NAV]
+      : NAV.filter(
+          (item) => item.href === "/pos" || item.href === "/shift" || item.href === "/kds",
+        );
 
   return (
     <nav className="flex flex-col gap-0.5">

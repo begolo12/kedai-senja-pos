@@ -9,7 +9,6 @@ import {
   orders,
   products,
   shifts,
-  stockMovements,
   vouchers,
 } from "@/lib/db/schema";
 import {
@@ -22,6 +21,8 @@ import {
 import { computeTotals, orderNumber } from "@/lib/money";
 import { dayStart, DAY_MS } from "@/lib/dates";
 import { getSettings } from "@/lib/settings";
+import { deductForSale } from "@/lib/recipes";
+import { pointsWithMultiplier, resolveTier } from "@/lib/tiers";
 
 export const runtime = "nodejs";
 
@@ -242,9 +243,10 @@ async function pushOrder(
 
   const customerId: number | null = input.customerId ?? null;
   let customerPoints = 0;
+  let customerSpent = 0;
   if (customerId) {
     const found = await db
-      .select({ id: customers.id, points: customers.points })
+      .select({ id: customers.id, points: customers.points, totalSpent: customers.totalSpent })
       .from(customers)
       .where(and(eq(customers.id, customerId), eq(customers.storeId, storeId)))
       .limit(1);
@@ -252,6 +254,7 @@ async function pushOrder(
       return { clientId: input.clientId, status: "rejected", error: "Pelanggan tidak ditemukan." };
     }
     customerPoints = found[0].points;
+    customerSpent = found[0].totalSpent;
   }
   let pointsRedeemed = 0;
   let redeemAmount = 0;
@@ -296,9 +299,11 @@ async function pushOrder(
   }
 
   const created = await db.transaction(async (tx) => {
+    const multiplier =
+      (await resolveTier(storeId, customerSpent))?.pointsMultiplier ?? 100;
     const pointsEarned =
       customerId && settings.pointsPerAmount
-        ? Math.floor(input.total / settings.pointsPerAmount)
+        ? pointsWithMultiplier(Math.floor(input.total / settings.pointsPerAmount), multiplier)
         : 0;
     const again = await tx
       .select({ id: orders.id, number: orders.number })
@@ -342,18 +347,16 @@ async function pushOrder(
     )[0]?.n;
 
     const knownProducts = new Set<number>();
+    const saleLines: { product: typeof products.$inferSelect; qty: number }[] = [];
     for (const item of input.items) {
       const found = await tx
-        .select({ id: products.id })
+        .select()
         .from(products)
         .where(and(eq(products.id, item.productId), eq(products.storeId, storeId)))
         .for("update");
       if (found[0]) {
         knownProducts.add(item.productId);
-        await tx
-          .update(products)
-          .set({ stock: sql`${products.stock} - ${item.qty}`, updatedAt: now })
-          .where(and(eq(products.id, item.productId), eq(products.storeId, storeId)));
+        saleLines.push({ product: found[0], qty: item.qty });
       }
     }
 
@@ -409,19 +412,16 @@ async function pushOrder(
       })),
     );
 
-    for (const item of input.items) {
-      if (!knownProducts.has(item.productId)) continue;
-      await tx.insert(stockMovements).values({
-        storeId,
-        productId: item.productId,
-        delta: -item.qty,
-        reason: "sale",
-        refType: "order",
-        refId: order.id,
-        userId,
-        note: "Sinkron offline",
-        createdAt,
-      });
+    // Potong stok lewat resep (bahan) bila produk punya resep.
+    const deducted = await deductForSale(tx, {
+      storeId,
+      userId,
+      orderId: order.id,
+      lines: saleLines,
+      createdAt,
+    });
+    if (!deducted.ok) {
+      throw new Error(deducted.error);
     }
 
     if (voucherRow) {

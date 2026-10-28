@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
+import Link from "next/link";
+import { Printer } from "lucide-react";
 import { and, asc, eq, like, or, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { categories, products } from "@/lib/db/schema";
+import { categories, products, recipeItems } from "@/lib/db/schema";
 import { requireAdmin } from "@/lib/auth";
 import { getSettings } from "@/lib/settings";
 import { formatMoney } from "@/lib/money";
@@ -27,6 +29,28 @@ export default async function ProductsPage({ searchParams }: PageProps<"/product
     .from(categories)
     .where(eq(categories.storeId, store.id))
     .orderBy(asc(categories.sortOrder));
+
+  // Daftar produk untuk editor resep (bahan) — tidak terfilter pencarian.
+  const allProducts = await db
+    .select({ id: products.id, name: products.name, unit: products.unit })
+    .from(products)
+    .where(eq(products.storeId, store.id))
+    .orderBy(asc(products.name));
+  const recipeRows = await db
+    .select({
+      productId: recipeItems.productId,
+      ingredientId: recipeItems.ingredientId,
+      qty: recipeItems.qty,
+    })
+    .from(recipeItems)
+    .innerJoin(products, eq(recipeItems.productId, products.id))
+    .where(eq(products.storeId, store.id));
+  const recipeByProduct = new Map<number, { productId: number; qty: number }[]>();
+  for (const row of recipeRows) {
+    const list = recipeByProduct.get(row.productId) ?? [];
+    list.push({ productId: row.ingredientId, qty: row.qty });
+    recipeByProduct.set(row.productId, list);
+  }
 
   const filters = [
     eq(products.storeId, store.id),
@@ -70,9 +94,17 @@ export default async function ProductsPage({ searchParams }: PageProps<"/product
         description="Harga, modal, dan stok. Produk nonaktif hilang dari kasir tapi riwayatnya tetap utuh."
         actions={
           <>
+            <Button
+              nativeButton={false}
+              variant="outline"
+              size="sm"
+              render={<Link href="/products/labels" />}
+            >
+              <Printer /> Label
+            </Button>
             <ImportMenuDialog />
             <CategoryManager categories={cats} />
-            <ProductDialog categories={cats} />
+            <ProductDialog categories={cats} products={allProducts} />
           </>
         }
       />
@@ -165,7 +197,18 @@ export default async function ProductsPage({ searchParams }: PageProps<"/product
                     <ProductToggle id={product.id} active={product.active} name={product.name} />
                   </td>
                   <td className="px-4 py-2.5 text-right">
-                    <ProductDialog
+                    <span className="inline-flex items-center gap-1">
+                      {product.barcode ? (
+                        <Link
+                          href={`/products/labels?ids=${product.id}`}
+                          aria-label={`Cetak label ${product.name}`}
+                          title="Cetak label barcode"
+                          className="grid size-7 place-items-center border border-border text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
+                        >
+                          <Printer className="size-3.5" />
+                        </Link>
+                      ) : null}
+                      <ProductDialog
                       categories={cats}
                       product={{
                         id: product.id,
@@ -180,8 +223,11 @@ export default async function ProductsPage({ searchParams }: PageProps<"/product
                         unit: product.unit,
                         options: product.options ?? "",
                         active: product.active,
+                        recipe: recipeByProduct.get(product.id) ?? [],
                       }}
+                      products={allProducts}
                     />
+                    </span>
                   </td>
                 </tr>
               );

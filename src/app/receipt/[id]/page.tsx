@@ -78,7 +78,16 @@ export default async function ReceiptPage({ params, searchParams }: PageProps<"/
       });
     }
   } else {
-    thermalLines.push({ kind: "text", text: pair("Dibayar", formatMoney(order.order.amountPaid, settings.currency), thermalWidth) });
+    thermalLines.push({
+      kind: "text",
+      text: pair(
+        "Dibayar",
+        order.order.amountPaid === null
+          ? "BELUM DIBAYAR"
+          : formatMoney(order.order.amountPaid, settings.currency),
+        thermalWidth,
+      ),
+    });
   }
   thermalLines.push({ kind: "text", text: pair("Kembali", formatMoney(order.order.changeDue, settings.currency), thermalWidth) });
   thermalLines.push({ kind: "text", text: pair("TOTAL", formatMoney(order.order.total, settings.currency), thermalWidth), bold: true });
@@ -154,7 +163,7 @@ export default async function ReceiptPage({ params, searchParams }: PageProps<"/
                 ? payments
                     .map((p) => `${methodLabel(p.method)} ${formatMoney(p.amount, settings.currency)}`)
                     .join(" · ")
-                : order.order.paymentMethod.toUpperCase()}
+                : (order.order.paymentMethod ?? "tagihan").toUpperCase()}
             </span>
           </div>
           <div className="flex justify-between">
@@ -220,7 +229,9 @@ export default async function ReceiptPage({ params, searchParams }: PageProps<"/
             <span>Total</span>
             <span className="tabular">{formatMoney(order.order.total, settings.currency)}</span>
           </div>
-          {payments.length > 1 ? (
+          {order.order.status === "open" ? (
+            <Line label="Pembayaran" value="Belum dibayar — tagihan meja" />
+          ) : payments.length > 1 ? (
             payments.map((p) => (
               <Line
                 key={p.id}
@@ -229,9 +240,11 @@ export default async function ReceiptPage({ params, searchParams }: PageProps<"/
               />
             ))
           ) : (
-            <Line label="Dibayar" value={formatMoney(order.order.amountPaid, settings.currency)} />
+            <Line label="Dibayar" value={formatMoney(order.order.amountPaid ?? 0, settings.currency)} />
           )}
-          <Line label="Kembali" value={formatMoney(order.order.changeDue, settings.currency)} />
+          {order.order.status !== "open" ? (
+            <Line label="Kembali" value={formatMoney(order.order.changeDue, settings.currency)} />
+          ) : null}
           {order.order.refundedTotal > 0 && order.order.status !== "refunded" ? (
             <Line
               label="Dikembalikan sebagian"
@@ -300,7 +313,7 @@ function receiptText(
         `${item.qty}× ${item.name}${item.note ? ` (${item.note})` : ""} — ${formatMoney(item.lineTotal, currency)}`,
     ),
     "",
-    `Total: ${formatMoney(order.order.total, currency)} (${order.order.paymentMethod.toUpperCase()})`,
+    `Total: ${formatMoney(order.order.total, currency)} (${(order.order.paymentMethod ?? "tagihan").toUpperCase()})`,
   ];
   if (order.order.pointsEarned > 0 && order.customerName) {
     lines.push(`Poin ${order.customerName}: +${order.order.pointsEarned}`);

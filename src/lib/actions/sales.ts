@@ -16,6 +16,8 @@ import {
 import { assertAdmin, assertStore } from "@/lib/auth";
 import { computeTotals, orderNumber } from "@/lib/money";
 import { dayStart } from "@/lib/dates";
+import { deductForSale, restoreForRefund } from "@/lib/recipes";
+import { pointsWithMultiplier, resolveTier } from "@/lib/tiers";
 import { checkoutSchema } from "@/lib/validation";
 
 export type CheckoutResult =
@@ -103,19 +105,10 @@ export async function checkoutAction(input: unknown): Promise<CheckoutResult> {
       rows.push({ product: found[0], qty, note });
     }
 
-    const requested = new Map<number, number>();
     for (const row of rows) {
       if (!row.product) return { ok: false as const, error: "Produk tidak ditemukan." };
       if (!row.product.active) {
         return { ok: false as const, error: `${row.product.name} sedang tidak dijual.` };
-      }
-      const total = (requested.get(row.product.id) ?? 0) + row.qty;
-      requested.set(row.product.id, total);
-      if (row.product.stock < total) {
-        return {
-          ok: false as const,
-          error: `Stok ${row.product.name} tinggal ${row.product.stock}.`,
-        };
       }
     }
 
@@ -176,9 +169,15 @@ export async function checkoutAction(input: unknown): Promise<CheckoutResult> {
     let customerId: number | null = null;
     let customerPoints = 0;
     let customerName = "";
+    let customerSpent = 0;
     if (data.customerId) {
       const found = await tx
-        .select({ id: customers.id, points: customers.points, name: customers.name })
+        .select({
+          id: customers.id,
+          points: customers.points,
+          name: customers.name,
+          totalSpent: customers.totalSpent,
+        })
         .from(customers)
         .where(
           and(
@@ -190,6 +189,7 @@ export async function checkoutAction(input: unknown): Promise<CheckoutResult> {
       customerId = found[0]?.id ?? null;
       customerPoints = found[0]?.points ?? 0;
       customerName = found[0]?.name ?? "";
+      customerSpent = found[0]?.totalSpent ?? 0;
     }
 
     // Tukar poin: butuh pelanggan, nilai tukar aktif, dan poin cukup.
@@ -214,6 +214,9 @@ export async function checkoutAction(input: unknown): Promise<CheckoutResult> {
         pointsRedeemed * store.pointsValue,
       );
     }
+
+    // Tier membership: kelipatan poin mengikuti total belanja SEBELUM pesanan ini.
+    const multiplier = (await resolveTier(store.id, customerSpent))?.pointsMultiplier ?? 100;
 
     const taxRate = store.taxRate;
     const totals = computeTotals(
@@ -252,7 +255,10 @@ export async function checkoutAction(input: unknown): Promise<CheckoutResult> {
 
     const pointsEarned =
       customerId && store.pointsPerAmount
-        ? Math.floor(totals.total / store.pointsPerAmount)
+        ? pointsWithMultiplier(
+            Math.floor(totals.total / store.pointsPerAmount),
+            multiplier,
+          )
         : 0;
 
     // Serialises the daily sequence; single-store scale makes this cheap and safe.
@@ -318,22 +324,15 @@ export async function checkoutAction(input: unknown): Promise<CheckoutResult> {
       })),
     );
 
-    for (const line of lines) {
-      await tx
-        .update(products)
-        .set({ stock: sql`${products.stock} - ${line.qty}`, updatedAt: createdAt })
-        .where(and(eq(products.id, line.product.id), eq(products.storeId, store.id)));
-      await tx.insert(stockMovements).values({
-        storeId: store.id,
-        productId: line.product.id,
-        delta: -line.qty,
-        reason: "sale",
-        refType: "order",
-        refId: order.id,
-        userId: user.id,
-        createdAt,
-      });
-    }
+    // Potong stok (produk berresep memotong bahan, bukan dirinya sendiri).
+    const deducted = await deductForSale(tx, {
+      storeId: store.id,
+      userId: user.id,
+      orderId: order.id,
+      lines: lines.map((line) => ({ product: line.product, qty: line.qty })),
+      createdAt,
+    });
+    if (!deducted.ok) return { ok: false as const, error: deducted.error };
 
     if (voucherRow) {
       await tx
@@ -475,32 +474,24 @@ async function refundOrderItems(
         .update(orderItems)
         .set({ refundedQty })
         .where(eq(orderItems.id, itemId));
-      if (!item.productId) continue;
-      await tx
-        .update(products)
-        .set({ stock: sql`${products.stock} + ${qty}`, updatedAt: now })
-        .where(
-          and(
-            eq(products.id, item.productId),
-            eq(products.storeId, store.id),
-          ),
-        );
-      await tx.insert(stockMovements).values({
-        storeId: store.id,
-        productId: item.productId,
-        delta: qty,
-        reason: "refund",
-        refType: "order",
-        refId: order.id,
-        userId: user.id,
-        note: trimmed,
-        createdAt: now,
-      });
     }
     // Items never touched by this request must also be exhausted for a full refund.
     if (items.some((item) => item.refundedQty + (qtyById.get(item.id) ?? 0) < item.qty)) {
       fullyRefunded = false;
     }
+
+    // Stok kembali mengikuti resep: produk berresep mengembalikan bahannya.
+    await restoreForRefund(tx, {
+      storeId: store.id,
+      userId: user.id,
+      orderId: order.id,
+      items: [...qtyById.entries()].map(([itemId, qty]) => {
+        const item = byId.get(itemId)!;
+        return { productId: item.productId, name: item.name, qty };
+      }),
+      reason: trimmed,
+      createdAt: now,
+    });
 
     // Poin dan total belanja dikoreksi proporsional nilai refund.
     const pointsBack = Math.round((order.pointsEarned * refundAmount) / order.total);

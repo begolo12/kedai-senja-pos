@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { and, desc, eq, like, or, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { customers } from "@/lib/db/schema";
+import { customers, tiers } from "@/lib/db/schema";
 import { requireAdmin } from "@/lib/auth";
 import { getSettings } from "@/lib/settings";
 import { formatDate, formatMoney } from "@/lib/money";
@@ -28,6 +28,17 @@ export default async function CustomersPage({ searchParams }: PageProps<"/custom
       ),
     )
     .orderBy(desc(customers.totalSpent));
+
+  // Tier aktif diurutkan ambang tertinggi lebih dulu; tier pertama yang
+  // terlampaui adalah tier pelanggan.
+  const activeTiers = await db
+    .select()
+    .from(tiers)
+    .where(and(eq(tiers.storeId, store.id), eq(tiers.active, true)))
+    .orderBy(desc(tiers.minTotalSpent));
+
+  const tierOf = (totalSpent: number) =>
+    activeTiers.find((tier) => totalSpent >= tier.minTotalSpent) ?? null;
 
   const stats = (await db
     .select({
@@ -89,6 +100,11 @@ export default async function CustomersPage({ searchParams }: PageProps<"/custom
                       {String(index + 1).padStart(2, "0")}
                     </span>
                     <span className="font-medium">{customer.name}</span>
+                    {tierOf(customer.totalSpent) ? (
+                      <span className="stamp border-signal/50 text-signal">
+                        {tierOf(customer.totalSpent)!.name}
+                      </span>
+                    ) : null}
                   </div>
                 </td>
                 <td className="px-4 py-2.5 text-xs text-muted-foreground">

@@ -148,7 +148,43 @@ eksplisit lewat `pnpm db:setup`; tidak ada DDL otomatis di request path.
 - Login hanya ID + PIN (tanpa password). Manajemen dapat mengganti PIN
   lewat tombol PIN dengan konfirmasi ulang.
 
-### 3.9 Dashboard
+### 3.10 Meja & self-order QR (P2)
+- CRUD meja (admin, menu Meja): nama unik, jumlah kursi, aktif/nonaktif.
+- **Tagihan meja**: kasir membuka tagihan lewat tombol "Tagih nanti (meja)"
+  atau pelanggan lewat QR; pesanan berstatus `open`, stok langsung dipotong,
+  muncul di KDS; dibayar (settle) di halaman Meja dengan poin tier.
+- **Pindah meja** dan **gabung tagihan** (admin) untuk tagihan terbuka;
+  gabung memindahkan item dan menghitung ulang total.
+- **Self-order QR** per meja: `/order/[code]?table=N` — katalog publik +
+  kirim pesanan ke `/api/public/order`; nomor pesanan ditampilkan ke
+  pelanggan. Laporan dan kas shift mengabaikan pesanan `open`/`merged`.
+
+### 3.11 KDS / layar dapur (P2)
+- `/kds` (kasir+): antrian pesanan hari ini per kartu — item, catatan, meja,
+  menit berjalan; pesanan > 10 menit disorot merah; auto-refresh 10 detik.
+- Tombol **Siap** (preparing → ready) dan **Sudah diangkat** (ready → served);
+  status tampil di detail pesanan.
+
+### 3.12 Membership tier (P2)
+- CRUD tier (admin, menu Membership): nama, ambang total belanja, kelipatan
+  poin (100 = normal), benefit, aktif/nonaktif.
+- Tier dihitung otomatis dari `customers.totalSpent` sebelum transaksi;
+  berlaku di checkout web, settle meja, dan sync tablet. Badge tier di
+  halaman Pelanggan.
+
+### 3.13 QRIS dinamis, resep/BOM, label barcode, katalog publik (P2)
+- **QRIS dinamis**: nominal (tag 54) disisipkan ke payload QRIS statis +
+  CRC16 dihitung ulang (`lib/qris.ts`, teruji) — tampil di dialog bayar web
+  dan tablet.
+- **Resep/BOM**: produk berresep memotong stok bahan saat terjual (checkout,
+  tagihan meja, self-order, sync tablet) dan mengembalikannya saat refund;
+  editor resep di form produk.
+- **Label barcode**: `/products/labels` — lembar label 40×25 mm dengan
+  Code128B SVG (encoder sendiri, teruji), nama, harga, nama toko.
+- **Katalog publik**: `/menu/[code]` — menu read-only untuk dibagikan, CTA
+  WhatsApp.
+
+### 3.14 Dashboard
 - Ringkasan hari ini vs kemarin, laba kotor, stok menipis.
 - Chart 7 hari, pesanan terbaru, produk terlaris hari ini.
 - Peringatan bila shift belum dibuka.
@@ -196,6 +232,15 @@ epoch milidetik.
 | `stock_movements` | storeId, productId, delta, reason, refType/refId, userId, note | Audit append-only per toko |
 | `stores` | code unik, name, address, phone, taxRate, receiptWidth, qrisPayload, receiptFooter, pointsPerAmount, active | Konfigurasi + identitas per toko |
 | `user_stores` | userId, storeId | Penugasan kasir ke toko |
+| `order_payments` | orderId, method, amount | Rincian split payment; tunai = nilai bersih setelah kembalian |
+| `vouchers` | storeId, code unik, type, value, minSubtotal, periode, usageLimit, usedCount, active | Diskon kode di checkout |
+| `suppliers` | storeId, name unik, phone, note, active | Mitra pembelian |
+| `purchase_orders` | storeId, supplierId, status ordered/received/cancelled, totalCost, expectedAt | PO ke supplier |
+| `purchase_order_items` | purchaseOrderId, productId, name, qty, unitCost, receivedQty | Snapshot item PO |
+| `tiers` | storeId, name unik, minTotalSpent, pointsMultiplier (100=1×), perks, active | Membership tier |
+| `tables` | storeId, name unik, seats, active | Denah meja + QR self-order |
+| `recipe_items` | productId, ingredientId, qty | BOM: produk memotong stok bahan |
+| `login_attempts` | username, success, createdAt | Throttle login lintas instance |
 
 **Invarian**
 1. `stock >= 0`; penyesuaian yang membuat minus ditolak.
@@ -247,6 +292,9 @@ internal tambahan selain ekspor CSV.
 | `saveCustomerAction` | `actions/customers.ts` | kasir+ |
 | `openShiftAction`, `closeShiftAction` | `actions/shifts.ts` | kasir+ |
 | `saveSupplierAction`, `toggleSupplierAction`, `createPurchaseOrderAction`, `receivePurchaseOrderAction`, `cancelPurchaseOrderAction` | `actions/purchases.ts` | admin |
+| `saveTierAction`, `toggleTierAction` | `actions/tiers.ts` | admin |
+| `saveTableAction`, `toggleTableAction`, `createOpenOrderAction`, `settleOrderAction`, `moveOrderTableAction`, `mergeOrdersAction` | `actions/tables.ts` | admin / kasir+ |
+| `setKitchenStatusAction` | `actions/kitchen.ts` | kasir+ |
 | `updateSettingsAction` | `actions/settings.ts` | admin |
 | `saveStaffAction`, `toggleStaffAction` | `actions/staff.ts` | admin |
 
@@ -296,23 +344,29 @@ kotak, garis putus-putus seperti struk.
 ### P1 — selesai
 Split payment/pembayaran campuran, refund sebagian per item, purchase
 order/supplier, refund tunai mempengaruhi kas seharusnya, audit login gagal
-lintas instance (tabel `login_attempts`), cetak ESC/POS langsung Bluetooth +
-cash drawer (Web Bluetooth di halaman struk), sinkron dua arah pelanggan
-yang dibuat offline, dan paritas tablet (tukar poin, voucher, tunda tiket,
-pelanggan baru offline) — semua sudah masuk.
+lintas instance (tabel `login_attempts` + cron Vercel
+`/api/maintenance/login-attempts`), cetak ESC/POS langsung Bluetooth **dan
+USB** (WebUSB) + cash drawer, sinkron dua arah pelanggan yang dibuat
+offline, dan paritas tablet (tukar poin, voucher, tunda tiket, pelanggan
+baru offline) — semua sudah masuk.
 
-### P1 — tersisa
-- Cetak ESC/POS via WebUSB (printer kabel) — Bluetooth sudah jalan.
-- Audit login gagal: pembersihan berkala lewat cron, bukan housekeeping
-  saat insert.
+### P2 — selesai
+Meja (denah, status, tagihan, pindah/gabung) & self-order QR, KDS / order
+display dapur, membership tier (campaign promo ditanggung voucher + tier),
+QRIS dinamis (nominal tertanam, tanpa gateway eksternal), resep & bahan baku
+(BOM), label barcode printing, dan toko online / katalog publik — semua
+sudah masuk.
 
-### P2 — pertumbuhan
-- Meja (denah, status, pindah/gabung) & self-order QR.
-- Membership tier dan campaign.
-- Integrasi akuntansi/pajak (e-Faktur), payment gateway QRIS dinamis.
-- Barcode label printing, resep & bahan baku (Bill of Materials).
-- Toko online / katalog publik.
-- KDS / order display dapur.
+### Tersisa — butuh layanan eksternal
+- e-Faktur / integrasi akuntansi pajak: perlu kredensial DJP atau partner
+  API berbayar; tidak bisa dijalankan mandiri.
+- Payment gateway QRIS dinamis penuh (server-side, notifikasi pembayaran):
+  saat ini QRIS dinamis dibangun lokal dari template merchant; integrasi
+  gateway (Midtrans/Xendit dsb.) menunggu keputusan akun.
+
+### P3 — gagasan lanjutan
+- Denah meja visual (posisi meja digambar), integrasi KDS ke printer dapur.
+- Sinkron tablet untuk tagihan meja/self-order (saat ini web-only).
 
 ## 12. Batasan yang diketahui
 

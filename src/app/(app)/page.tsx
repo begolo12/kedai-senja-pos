@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ArrowRight, Banknote, ChartNoAxesColumn, ReceiptText, TriangleAlert } from "lucide-react";
-import { and, desc, eq, gte, lt, ne, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lt, sql } from "drizzle-orm";
 import { db, rows } from "@/lib/db";
 import { orderItems, orders, products, users } from "@/lib/db/schema";
 import { requireAdmin } from "@/lib/auth";
@@ -36,7 +36,7 @@ export default async function DashboardPage() {
         .where(
           and(
             eq(orders.storeId, store.id),
-            ne(orders.status, "refunded"),
+            inArray(orders.status, ["completed", "partially_refunded"]),
             gte(orders.createdAt, new Date(from)),
             lt(orders.createdAt, new Date(to)),
           ),
@@ -56,7 +56,7 @@ export default async function DashboardPage() {
            coalesce(sum(total - refunded_total), 0) as revenue,
            count(*) as orders
     from orders
-    where store_id = ${store.id} and status <> 'refunded' and created_at >= ${new Date(weekStart)}
+    where store_id = ${store.id} and status in ('completed','partially_refunded') and created_at >= ${new Date(weekStart)}
     group by 1
     order by 1
   `);
@@ -112,7 +112,7 @@ export default async function DashboardPage() {
     .where(
       and(
         eq(orders.storeId, store.id),
-        ne(orders.status, "refunded"),
+        inArray(orders.status, ["completed", "partially_refunded"]),
         gte(orders.createdAt, new Date(today)),
       ),
     )
@@ -262,7 +262,7 @@ export default async function DashboardPage() {
                   <div className="min-w-0">
                     <p className="font-mono text-xs">{order.number}</p>
                     <p className="truncate text-[11px] text-muted-foreground">
-                      {formatTime(order.createdAt)} · {order.cashier} · {order.method.toUpperCase()}
+                      {formatTime(order.createdAt)} · {order.cashier} · {(order.method ?? "tagihan").toUpperCase()}
                     </p>
                   </div>
                   <div className="flex items-center gap-3">

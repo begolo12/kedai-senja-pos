@@ -40,6 +40,8 @@ import {
   type DiscountType,
 } from "@/lib/money";
 import { checkoutAction } from "@/lib/actions/sales";
+import { createOpenOrderAction } from "@/lib/actions/tables";
+import { dynamicQris } from "@/lib/qris";
 import { QRCodeSVG } from "qrcode.react";
 
 export type PosProduct = {
@@ -105,6 +107,7 @@ export function PosTerminal({
   qrisPayload,
   pointsValue,
   vouchers,
+  tables,
 }: {
   products: PosProduct[];
   categories: Category[];
@@ -114,6 +117,7 @@ export function PosTerminal({
   qrisPayload: string;
   pointsValue: number;
   vouchers: VoucherOption[];
+  tables: { id: number; name: string; seats: number }[];
 }) {
   const router = useRouter();
   const [lines, setLines] = useState<Line[]>([]);
@@ -127,6 +131,7 @@ export function PosTerminal({
   const [customerQuery, setCustomerQuery] = useState("");
   const [orderType, setOrderType] = useState<"dine_in" | "takeaway">("dine_in");
   const [tableLabel, setTableLabel] = useState("");
+  const [tableId, setTableId] = useState<number | null>(null);
   const [optionProduct, setOptionProduct] = useState<PosProduct | null>(null);
   const [optionChoice, setOptionChoice] = useState("");
   const [optionNote, setOptionNote] = useState("");
@@ -530,6 +535,45 @@ export function PosTerminal({
     setParked((prev) => prev.filter((p) => p.id !== id));
   }
 
+  function openTableTab() {
+    if (lines.length === 0) {
+      toast.error("Keranjang masih kosong.");
+      return;
+    }
+    startTransition(async () => {
+      const result = await createOpenOrderAction({
+        clientId: clientId.current,
+        tableId,
+        tableLabel,
+        note: "",
+        items: lines.map((line) => ({
+          productId: line.productId,
+          qty: line.qty,
+          note: line.note,
+        })),
+      });
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      clientId.current = crypto.randomUUID();
+      setLines([]);
+      setDiscountType(null);
+      setDiscountValue(0);
+      setDiscountDraft("");
+      setCustomerId(null);
+      setTableLabel("");
+      setTableId(null);
+      setVoucher(null);
+      setVoucherInput("");
+      setPointsRedeem(0);
+      setPaymentOpen(false);
+      localStorage.removeItem(STORAGE_KEY);
+      toast.success(`Tagihan ${result.number} dibuka — bayar nanti di halaman Meja.`);
+      router.push("/tables");
+    });
+  }
+
   function confirmPayment() {
     setError(null);
     if (method === "cash" && paid < totals.total) {
@@ -808,13 +852,34 @@ export function PosTerminal({
             Bungkus
           </button>
           {orderType === "dine_in" ? (
-            <Input
-              value={tableLabel}
-              onChange={(event) => setTableLabel(event.target.value)}
-              placeholder="Meja / nama (opsional)"
-              aria-label="Nomor meja atau nama pelanggan"
-              className="col-span-2 h-7 rounded-none border-border bg-transparent px-2 text-[11px]"
-            />
+            tables.length > 0 ? (
+              <select
+                value={tableId ?? ""}
+                onChange={(event) => {
+                  const next = event.target.value;
+                  const table = tables.find((entry) => String(entry.id) === next);
+                  setTableId(table?.id ?? null);
+                  setTableLabel(table?.name ?? "");
+                }}
+                aria-label="Pilih meja"
+                className="col-span-2 h-7 rounded-none border border-border bg-transparent px-2 text-[11px] outline-none focus:border-ring"
+              >
+                <option value="">Meja / nama (opsional)</option>
+                {tables.map((table) => (
+                  <option key={table.id} value={table.id}>
+                    {table.name} · {table.seats} kursi
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <Input
+                value={tableLabel}
+                onChange={(event) => setTableLabel(event.target.value)}
+                placeholder="Meja / nama (opsional)"
+                aria-label="Nomor meja atau nama pelanggan"
+                className="col-span-2 h-7 rounded-none border-border bg-transparent px-2 text-[11px]"
+              />
+            )
           ) : null}
         </div>
 
@@ -1355,7 +1420,16 @@ export function PosTerminal({
                     className="mx-auto h-48 w-48 bg-white object-contain p-1"
                   />
                 ) : (
-                  <QRCodeSVG value={qrisPayload} size={190} className="mx-auto bg-white p-2" />
+                  <>
+                    <QRCodeSVG
+                      value={dynamicQris(qrisPayload, totals.total) ?? qrisPayload}
+                      size={190}
+                      className="mx-auto bg-white p-2"
+                    />
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      QRIS nominal {formatMoney(totals.total, currency)} — terisi otomatis.
+                    </p>
+                  </>
                 )
               ) : (
                 <p className="text-xs text-muted-foreground">
@@ -1391,6 +1465,11 @@ export function PosTerminal({
             {pending ? <Loader2 className="animate-spin" /> : null}
             Terima pembayaran
           </Button>
+          {orderType === "dine_in" ? (
+            <Button variant="outline" onClick={openTableTab} disabled={pending} className="w-full">
+              <Pause /> Tagih nanti (meja)
+            </Button>
+          ) : null}
         </DialogContent>
       </Dialog>
 

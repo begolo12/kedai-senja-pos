@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { categories, products } from "@/lib/db/schema";
+import { categories, products, recipeItems } from "@/lib/db/schema";
 import { assertAdmin, type ActionResult } from "@/lib/auth";
 import { productSchema, categorySchema } from "@/lib/validation";
 import { parseCsv } from "@/lib/csv";
@@ -18,6 +18,40 @@ function duplicate(error: unknown) {
   );
 }
 
+/** Ganti resep produk; validasi bahan ada di toko yang sama. */
+async function replaceRecipe(
+  storeId: number,
+  productId: number,
+  recipe: { productId: number; qty: number }[],
+): Promise<string | null> {
+  const merged = new Map<number, number>();
+  for (const row of recipe) {
+    if (row.productId === productId) {
+      return "Produk tidak bisa jadi bahan dirinya sendiri.";
+    }
+    merged.set(row.productId, (merged.get(row.productId) ?? 0) + row.qty);
+  }
+  for (const [ingredientId] of merged) {
+    const found = await db
+      .select({ id: products.id })
+      .from(products)
+      .where(and(eq(products.id, ingredientId), eq(products.storeId, storeId)))
+      .limit(1);
+    if (!found[0]) return "Bahan resep tidak ditemukan.";
+  }
+  await db.delete(recipeItems).where(eq(recipeItems.productId, productId));
+  if (merged.size > 0) {
+    await db.insert(recipeItems).values(
+      [...merged.entries()].map(([ingredientId, qty]) => ({
+        productId,
+        ingredientId,
+        qty,
+      })),
+    );
+  }
+  return null;
+}
+
 export async function saveProductAction(input: unknown): Promise<ActionResult> {
   const auth = await assertAdmin();
   if (!auth.ok) return auth;
@@ -29,6 +63,7 @@ export async function saveProductAction(input: unknown): Promise<ActionResult> {
   }
   const data = parsed.data;
   const now = new Date();
+  let productId = data.id ?? null;
 
   try {
     if (data.id) {
@@ -56,24 +91,33 @@ export async function saveProductAction(input: unknown): Promise<ActionResult> {
         })
         .where(and(eq(products.id, data.id), eq(products.storeId, storeId)));
     } else {
-      await db.insert(products).values({
-        storeId,
-        name: data.name,
-        sku: data.sku.toUpperCase(),
-        barcode: data.barcode || null,
-        categoryId: data.categoryId,
-        price: data.price,
-        cost: data.cost,
-        stock: data.stock,
-        lowStockAt: data.lowStockAt,
-        unit: data.unit,
-        options: data.options || null,
-        active: data.active,
-      });
+      const [inserted] = await db
+        .insert(products)
+        .values({
+          storeId,
+          name: data.name,
+          sku: data.sku.toUpperCase(),
+          barcode: data.barcode || null,
+          categoryId: data.categoryId,
+          price: data.price,
+          cost: data.cost,
+          stock: data.stock,
+          lowStockAt: data.lowStockAt,
+          unit: data.unit,
+          options: data.options || null,
+          active: data.active,
+        })
+        .returning({ id: products.id });
+      productId = inserted.id;
     }
   } catch (error) {
     if (duplicate(error)) return { ok: false, error: "SKU atau barcode sudah dipakai." };
     throw error;
+  }
+
+  if (productId !== null) {
+    const recipeError = await replaceRecipe(storeId, productId, data.recipe ?? []);
+    if (recipeError) return { ok: false, error: recipeError };
   }
 
   revalidatePath("/products");

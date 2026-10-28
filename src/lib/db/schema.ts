@@ -169,10 +169,11 @@ export const orders = pgTable(
     number: text("number").notNull(),
     clientId: text("client_id").notNull(),
     shiftId: integer("shift_id").references(() => shifts.id),
-    userId: integer("user_id")
-      .notNull()
-      .references(() => users.id),
+    userId: integer("user_id").references(() => users.id),
     customerId: integer("customer_id").references(() => customers.id, {
+      onDelete: "set null",
+    }),
+    tableId: integer("table_id").references(() => storeTables.id, {
       onDelete: "set null",
     }),
     subtotal: bigint("subtotal", { mode: "number" }).notNull(),
@@ -197,13 +198,18 @@ export const orders = pgTable(
       .notNull()
       .default("dine_in"),
     tableLabel: text("table_label"),
+    kitchenStatus: text("kitchen_status", {
+      enum: ["preparing", "ready", "served"],
+    })
+      .notNull()
+      .default("preparing"),
     paymentMethod: text("payment_method", {
       enum: ["cash", "card", "qris", "mixed"],
-    }).notNull(),
-    amountPaid: bigint("amount_paid", { mode: "number" }).notNull(),
+    }),
+    amountPaid: bigint("amount_paid", { mode: "number" }),
     changeDue: bigint("change_due", { mode: "number" }).notNull().default(0),
     status: text("status", {
-      enum: ["completed", "refunded", "partially_refunded"],
+      enum: ["open", "completed", "refunded", "partially_refunded", "merged"],
     })
       .notNull()
       .default("completed"),
@@ -214,6 +220,7 @@ export const orders = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
+    settledAt: timestamp("settled_at", { withTimezone: true }),
     refundedAt: timestamp("refunded_at", { withTimezone: true }),
     refundedBy: integer("refunded_by").references(() => users.id),
   },
@@ -330,6 +337,9 @@ export type Voucher = typeof vouchers.$inferSelect;
 export type Supplier = typeof suppliers.$inferSelect;
 export type PurchaseOrder = typeof purchaseOrders.$inferSelect;
 export type PurchaseOrderItem = typeof purchaseOrderItems.$inferSelect;
+export type Tier = typeof tiers.$inferSelect;
+export type StoreTable = typeof storeTables.$inferSelect;
+export type RecipeItem = typeof recipeItems.$inferSelect;
 
 export const suppliers = pgTable(
   "suppliers",
@@ -408,4 +418,60 @@ export const loginAttempts = pgTable(
       .defaultNow(),
   },
   (t) => [index("login_attempts_username_created_idx").on(t.username, t.createdAt)],
+);
+
+export const tiers = pgTable(
+  "tiers",
+  {
+    id: serial("id").primaryKey(),
+    storeId: integer("store_id")
+      .notNull()
+      .references(() => stores.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    minTotalSpent: bigint("min_total_spent", { mode: "number" })
+      .notNull()
+      .default(0),
+    pointsMultiplier: integer("points_multiplier").notNull().default(100),
+    perks: text("perks").notNull().default(""),
+    active: boolean("active").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("tiers_store_name_idx").on(t.storeId, t.name),
+    index("tiers_store_min_idx").on(t.storeId, t.minTotalSpent),
+  ],
+);
+
+export const storeTables = pgTable(
+  "tables",
+  {
+    id: serial("id").primaryKey(),
+    storeId: integer("store_id")
+      .notNull()
+      .references(() => stores.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    seats: integer("seats").notNull().default(2),
+    active: boolean("active").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [uniqueIndex("tables_store_name_idx").on(t.storeId, t.name)],
+);
+
+export const recipeItems = pgTable(
+  "recipe_items",
+  {
+    id: serial("id").primaryKey(),
+    productId: integer("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    ingredientId: integer("ingredient_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    qty: integer("qty").notNull().default(1),
+  },
+  (t) => [index("recipe_items_product_idx").on(t.productId)],
 );

@@ -68,7 +68,7 @@ export default async function OrdersPage({ searchParams }: PageProps<"/orders">)
   const totals = (await db
     .select({
       count: sql<number>`count(*)`,
-      revenue: sql<number>`coalesce(sum(case when ${orders.status} <> 'refunded' then ${orders.total} - ${orders.refundedTotal} else 0 end), 0)`,
+      revenue: sql<number>`coalesce(sum(case when ${orders.status} in ('completed','partially_refunded') then ${orders.total} - ${orders.refundedTotal} else 0 end), 0)`,
       refunds: sql<number>`coalesce(sum(${orders.refundedTotal}), 0)`,
     })
     .from(orders)

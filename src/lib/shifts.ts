@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { db } from "./db";
 import { orderPayments, orders, shifts } from "./db/schema";
 
@@ -39,7 +39,14 @@ export async function getShiftSummary(
     db
       .select({ id: orders.id, total: orders.total, refundedTotal: orders.refundedTotal })
       .from(orders)
-      .where(and(eq(orders.shiftId, shiftId), eq(orders.storeId, storeId))),
+      .where(
+        and(
+          eq(orders.shiftId, shiftId),
+          eq(orders.storeId, storeId),
+          // Tagihan meja belum dibayar tidak masuk kas; dihitung saat settle.
+          inArray(orders.status, ["completed", "partially_refunded"]),
+        ),
+      ),
     db
       .select({
         orderId: orderPayments.orderId,

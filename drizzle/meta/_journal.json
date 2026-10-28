@@ -22,6 +22,13 @@
       "when": 1793159061298,
       "tag": "0002_wooden_paibok",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1793161255559,
+      "tag": "0003_futuristic_king_bedlam",
+      "breakpoints": true
     }
   ]
 }

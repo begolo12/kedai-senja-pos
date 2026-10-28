@@ -9,8 +9,11 @@ import {
   products,
   purchaseOrderItems,
   purchaseOrders,
+  recipeItems,
+  storeTables,
   stores,
   suppliers,
+  tiers,
   userStores,
   users,
 } from "./schema";
@@ -164,6 +167,8 @@ export async function seedIfEmpty(db: DB) {
     });
 
     let productRows: { id: number; name: string; sku: string; price: number; cost: number }[] = [];
+    // Resep contoh ditautkan ke produk toko pertama (Kemang).
+    let firstStoreProducts: typeof productRows = [];
 
     for (const [storeIndex, store] of storeRows.entries()) {
       const catRows = await tx
@@ -201,6 +206,7 @@ export async function seedIfEmpty(db: DB) {
           price: products.price,
           cost: products.cost,
         });
+      if (storeIndex === 0) firstStoreProducts = productRows;
 
       const customerRows = await tx
         .insert(customers)
@@ -367,5 +373,47 @@ export async function seedIfEmpty(db: DB) {
         unitCost: item.cost,
       })),
     );
+
+    // Membership tier contoh: Silver default, Gold di atas Rp 5 juta belanja.
+    await tx.insert(tiers).values([
+      {
+        storeId: storeRows[0].id,
+        name: "Silver",
+        minTotalSpent: 0,
+        pointsMultiplier: 100,
+        perks: "Poin normal untuk semua pelanggan.",
+        active: true,
+      },
+      {
+        storeId: storeRows[0].id,
+        name: "Gold",
+        minTotalSpent: 5_000_000_00,
+        pointsMultiplier: 150,
+        perks: "Poin 1,5× setelah total belanja Rp 5 juta.",
+        active: true,
+      },
+    ]);
+
+    // Denah meja contoh (8 meja, 2/4 kursi) + QR self-order siap dipakai.
+    await tx.insert(storeTables).values(
+      Array.from({ length: 8 }, (_, index) => ({
+        storeId: storeRows[0].id,
+        name: `Meja ${index + 1}`,
+        seats: index < 4 ? 2 : 4,
+        active: true,
+      })),
+    );
+
+    // Resep BOM contoh: Ricebowl Telur Sambal memakai 1 nasi + 1 telur.
+    const bySku = new Map(firstStoreProducts.map((item) => [item.sku, item.id]));
+    const bowl = bySku.get("RCB-TELUR");
+    const rice = bySku.get("TMB-NASI");
+    const egg = bySku.get("TMB-TELUR");
+    if (bowl && rice && egg) {
+      await tx.insert(recipeItems).values([
+        { productId: bowl, ingredientId: rice, qty: 1 },
+        { productId: bowl, ingredientId: egg, qty: 1 },
+      ]);
+    }
   });
 }

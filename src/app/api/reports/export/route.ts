@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, lt } from "drizzle-orm";
+import { and, asc, eq, gte, lt, ne } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { customers, orderItems, orders, users } from "@/lib/db/schema";
 import { getStoreContext } from "@/lib/auth";
@@ -43,6 +43,8 @@ export async function GET(request: Request) {
         eq(orders.storeId, storeId),
         gte(orders.createdAt, start),
         lt(orders.createdAt, end),
+        ne(orders.status, "open"),
+        ne(orders.status, "merged"),
       ),
     )
     .orderBy(asc(orders.createdAt));
@@ -74,7 +76,7 @@ export async function GET(request: Request) {
         new Date(row.createdAt).toISOString(),
         row.cashier,
         row.customer ?? "",
-        row.method,
+        row.method ?? "tagihan",
         row.status,
         row.subtotal / 100,
         row.discount / 100,
