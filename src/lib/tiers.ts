@@ -2,15 +2,20 @@ import { and, desc, eq } from "drizzle-orm";
 import { db } from "./db";
 import { customers, tiers, type Tier } from "./db/schema";
 
+/** Executor query — koneksi pool biasa atau transaksi terbuka. */
+export type QueryExec = Pick<typeof db, "select">;
+
 /**
  * Tier pelanggan: tier aktif dengan ambang totalSpent tertinggi yang sudah
- * dilampaui. Tanpa tier → multiplier 100 (poin normal).
+ * dilampaui. Tanpa tier → multiplier 100 (poin normal). `exec` boleh berupa
+ * transaksi terbuka supaya tidak membuka koneksi pool baru di dalamnya.
  */
 export async function resolveTier(
   storeId: number,
   totalSpent: number,
+  exec: QueryExec = db,
 ): Promise<Tier | null> {
-  const rows = await db
+  const rows = await exec
     .select()
     .from(tiers)
     .where(and(eq(tiers.storeId, storeId), eq(tiers.active, true)))

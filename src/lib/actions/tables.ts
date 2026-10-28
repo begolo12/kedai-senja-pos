@@ -18,7 +18,6 @@ import { dayStart } from "@/lib/dates";
 import { deductForSale } from "@/lib/recipes";
 import { pointsWithMultiplier, resolveTier } from "@/lib/tiers";
 import { tableSchema } from "@/lib/validation";
-import { getSettings } from "@/lib/settings";
 
 export async function saveTableAction(input: unknown): Promise<ActionResult> {
   const auth = await assertAdmin();
@@ -337,7 +336,9 @@ export async function settleOrderAction(
       return { ok: false as const, error: "Tagihan ini sudah diselesaikan." };
     }
 
-    const settings = await getSettings(store.id);
+    // Ambil pengaturan dan tier lewat koneksi transaksi, buka pool baru
+    // di dalam transaksi akan menyumbat backend single-connection (PGlite).
+    const taxRate = store.taxRate;
     const cashTotal = list
       .filter((p) => p.method === "cash")
       .reduce((sum, p) => sum + p.amount, 0);
@@ -376,9 +377,9 @@ export async function settleOrderAction(
         .limit(1);
       if (customer[0]) {
         const multiplier =
-          (await resolveTier(store.id, customer[0].totalSpent))?.pointsMultiplier ?? 100;
-        pointsEarned = settings.pointsPerAmount
-          ? pointsWithMultiplier(Math.floor(order.total / settings.pointsPerAmount), multiplier)
+          (await resolveTier(store.id, customer[0].totalSpent, tx))?.pointsMultiplier ?? 100;
+        pointsEarned = store.pointsPerAmount
+          ? pointsWithMultiplier(Math.floor(order.total / store.pointsPerAmount), multiplier)
           : 0;
         await tx
           .update(customers)
@@ -496,14 +497,13 @@ export async function mergeOrdersAction(
     const items = await tx.select().from(orderItems).where(eq(orderItems.orderId, targetId));
     const subtotal = items.reduce((sum, item) => sum + item.lineTotal, 0);
     const costTotal = items.reduce((sum, item) => sum + item.cost * item.qty, 0);
-    const settings = await getSettings(store.id);
     const discountAmount =
       target.discountType === "percent"
         ? Math.round((subtotal * Math.min(100, Math.max(0, target.discountValue))) / 100)
         : target.discountType === "amount"
           ? Math.min(subtotal, Math.max(0, target.discountValue))
           : 0;
-    const taxAmount = Math.round(((subtotal - discountAmount) * settings.taxRate) / 10000);
+    const taxAmount = Math.round(((subtotal - discountAmount) * store.taxRate) / 10000);
 
     await tx
       .update(orders)

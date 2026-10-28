@@ -45,7 +45,10 @@ export function SettleDialog({
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [method, setMethod] = useState<Method>("cash");
-  const [cash, setCash] = useState("");
+  // Pra-isi tunai pembulatan ke 10 ribu terdekat, seperti dialog kasir.
+  const [cash, setCash] = useState(
+    () => String(Math.ceil(bill.total / 100 / 10000) * 10000),
+  );
   const [customerId, setCustomerId] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();

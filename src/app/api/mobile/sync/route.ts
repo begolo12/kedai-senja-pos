@@ -299,8 +299,10 @@ async function pushOrder(
   }
 
   const created = await db.transaction(async (tx) => {
+    // Semua query lewat koneksi transaksi — pool baru di dalam transaksi
+    // menyumbat backend single-connection (PGlite lokal).
     const multiplier =
-      (await resolveTier(storeId, customerSpent))?.pointsMultiplier ?? 100;
+      (await resolveTier(storeId, customerSpent, tx))?.pointsMultiplier ?? 100;
     const pointsEarned =
       customerId && settings.pointsPerAmount
         ? pointsWithMultiplier(Math.floor(input.total / settings.pointsPerAmount), multiplier)

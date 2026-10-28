@@ -216,7 +216,9 @@ export async function checkoutAction(input: unknown): Promise<CheckoutResult> {
     }
 
     // Tier membership: kelipatan poin mengikuti total belanja SEBELUM pesanan ini.
-    const multiplier = (await resolveTier(store.id, customerSpent))?.pointsMultiplier ?? 100;
+    // Ikut koneksi transaksi agar tidak membuka koneksi pool baru.
+    const multiplier =
+      (await resolveTier(store.id, customerSpent, tx))?.pointsMultiplier ?? 100;
 
     const taxRate = store.taxRate;
     const totals = computeTotals(
