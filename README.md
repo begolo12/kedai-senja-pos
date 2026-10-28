@@ -13,9 +13,10 @@ refund parsial per item, **meja dengan tagihan bayar-nanti + pindah/gabung
 purchase order ke supplier (stok masuk otomatis saat diterima), **resep
 bahan baku (BOM)** — produk komposit memotong stok bahannya, struk digital
 via WhatsApp, cetak ESC/POS langsung lewat Bluetooth/USB + buka laci tunai,
-**QRIS dinamis** (nominal tertanam otomatis), label barcode siap cetak,
-katalog publik `/menu/[kode-toko]`, laporan jam sibuk per jam, nomor struk
-harian `TRA-YYMMDD-NNN`.
+**QRIS gambar merchant sendiri** (unggah gambar QR dari alat Anda, tampil
+apa adanya — tanpa gateway), label barcode siap cetak, katalog publik
+`/menu/[kode-toko]`, laporan jam sibuk per jam, nomor struk harian
+`TRA-YYMMDD-NNN`.
 
 - Web production: https://kedai-senja-pos.vercel.app
 - Repo: https://github.com/begolo12/kedai-senja-pos (publik)

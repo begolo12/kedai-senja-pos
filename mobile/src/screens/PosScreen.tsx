@@ -2,7 +2,6 @@ import { useMemo, useRef, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { ArrowRight, Pause, ShoppingBag, TicketPercent, X } from "lucide-react";
 import { computeTotals, formatMoney, formatNumber, parseMoneyInput } from "../lib/money";
-import { dynamicQris } from "../lib/qris";
 import type { Category, Customer, Product, Settings, Voucher } from "../lib/types";
 
 export type CartLine = { id: string; product: Product; qty: number; note: string };
@@ -582,18 +581,12 @@ export function PosScreen({
                   settings.qrisPayload.startsWith("data:image") ? (
                     <img src={settings.qrisPayload} alt="QRIS merchant" />
                   ) : (
-                    <>
-                      <QRCodeSVG
-                        value={dynamicQris(settings.qrisPayload, totals.total) ?? settings.qrisPayload}
-                        size={180}
-                      />
-                      <p className="hint">Nominal {formatMoney(totals.total)} terisi otomatis.</p>
-                    </>
+                    <QRCodeSVG value={settings.qrisPayload} size={180} />
                   )
                 ) : (
                   <p className="hint">QRIS belum diatur di Pengaturan.</p>
                 )}
-                <p className="hint">Pindai, lalu konfirmasi setelah berhasil.</p>
+                <p className="hint">Pindai dengan QR Anda, lalu konfirmasi setelah berhasil.</p>
               </div>
             ) : (
               <p className="hint">Konfirmasi setelah pembayaran kartu diterima.</p>

@@ -172,10 +172,11 @@ eksplisit lewat `pnpm db:setup`; tidak ada DDL otomatis di request path.
   berlaku di checkout web, settle meja, dan sync tablet. Badge tier di
   halaman Pelanggan.
 
-### 3.13 QRIS dinamis, resep/BOM, label barcode, katalog publik (P2)
-- **QRIS dinamis**: nominal (tag 54) disisipkan ke payload QRIS statis +
-  CRC16 dihitung ulang (`lib/qris.ts`, teruji) — tampil di dialog bayar web
-  dan tablet.
+### 3.13 QRIS, resep/BOM, label barcode, katalog publik (P2)
+- **QRIS**: gambar QR dari alat/bank Anda diunggah di Pengaturan (opsi
+  unggah gambar; maks 300 KB) dan ditampilkan apa adanya saat pembayaran —
+  QR milik merchant berjalan lokal, tanpa pembuatan QR dinamis dan tanpa
+  gateway eksternal.
 - **Resep/BOM**: produk berresep memotong stok bahan saat terjual (checkout,
   tagihan meja, self-order, sync tablet) dan mengembalikannya saat refund;
   editor resep di form produk.
@@ -353,16 +354,17 @@ baru offline) — semua sudah masuk.
 ### P2 — selesai
 Meja (denah, status, tagihan, pindah/gabung) & self-order QR, KDS / order
 display dapur, membership tier (campaign promo ditanggung voucher + tier),
-QRIS dinamis (nominal tertanam, tanpa gateway eksternal), resep & bahan baku
-(BOM), label barcode printing, dan toko online / katalog publik — semua
-sudah masuk.
+QRIS gambar merchant lokal (unggah gambar, tanpa pembuatan dinamis), resep
+& bahan baku (BOM), label barcode printing, dan toko online / katalog
+publik — semua sudah masuk.
 
 ### Tersisa — butuh layanan eksternal
 - e-Faktur / integrasi akuntansi pajak: perlu kredensial DJP atau partner
   API berbayar; tidak bisa dijalankan mandiri.
-- Payment gateway QRIS dinamis penuh (server-side, notifikasi pembayaran):
-  saat ini QRIS dinamis dibangun lokal dari template merchant; integrasi
-  gateway (Midtrans/Xendit dsb.) menunggu keputusan akun.
+- Payment gateway QRIS dinamis (nominal server-side + notifikasi
+  pembayaran): QR memakai gambar QR merchant milik sendiri sesuai keputusan
+  pemilik; integrasi gateway (Midtrans/Xendit dsb.) menunggu keputusan
+  akun.
 
 ### P3 — gagasan lanjutan
 - Denah meja visual (posisi meja digambar), integrasi KDS ke printer dapur.

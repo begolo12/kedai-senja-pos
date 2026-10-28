@@ -41,7 +41,6 @@ import {
 } from "@/lib/money";
 import { checkoutAction } from "@/lib/actions/sales";
 import { createOpenOrderAction } from "@/lib/actions/tables";
-import { dynamicQris } from "@/lib/qris";
 import { QRCodeSVG } from "qrcode.react";
 
 export type PosProduct = {
@@ -1420,24 +1419,15 @@ export function PosTerminal({
                     className="mx-auto h-48 w-48 bg-white object-contain p-1"
                   />
                 ) : (
-                  <>
-                    <QRCodeSVG
-                      value={dynamicQris(qrisPayload, totals.total) ?? qrisPayload}
-                      size={190}
-                      className="mx-auto bg-white p-2"
-                    />
-                    <p className="mt-1 text-[11px] text-muted-foreground">
-                      QRIS nominal {formatMoney(totals.total, currency)} — terisi otomatis.
-                    </p>
-                  </>
+                  <QRCodeSVG value={qrisPayload} size={190} className="mx-auto bg-white p-2" />
                 )
               ) : (
                 <p className="text-xs text-muted-foreground">
-                  QRIS belum diatur. Unggah gambar di Pengaturan.
+                  QRIS belum diatur. Unggah gambar QR dari alat/bank Anda di Pengaturan.
                 </p>
               )}
               <p className="mt-2 text-xs text-muted-foreground">
-                Pindai, lalu konfirmasi setelah pembayaran berhasil.
+                Pindai dengan QR Anda di kasir, lalu konfirmasi setelah pembayaran berhasil.
               </p>
             </div>
           ) : (
