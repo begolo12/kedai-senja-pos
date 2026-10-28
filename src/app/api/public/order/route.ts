@@ -6,6 +6,22 @@ import { createOpenOrderInTx } from "@/lib/actions/tables";
 
 export const runtime = "nodejs";
 
+// Throttle per-instance (IP); reset saat cold start serverless — sama seperti
+// throttle login mobile, sudah tercatat di batasan PLAN.md.
+const hits = new Map<string, { count: number; resetAt: number }>();
+const WINDOW_MS = 60 * 1000;
+const MAX_ORDERS = 10;
+
+function throttled(key: string, now = Date.now()) {
+  const entry = hits.get(key);
+  if (!entry || entry.resetAt < now) {
+    hits.set(key, { count: 1, resetAt: now + WINDOW_MS });
+    return false;
+  }
+  entry.count += 1;
+  return entry.count > MAX_ORDERS;
+}
+
 const itemSchema = z.object({
   productId: z.number().int().positive(),
   qty: z.number().int().min(1).max(99),
@@ -20,6 +36,13 @@ const payloadSchema = z.object({
 
 /** Self-order QR: pelanggan mengirim pesanan; tagihan meja dibuat terbuka. */
 export async function POST(request: Request) {
+  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "local";
+  if (throttled(ip)) {
+    return Response.json(
+      { error: "Terlalu banyak pesanan dari perangkat ini. Coba lagi sebentar." },
+      { status: 429 },
+    );
+  }
   const parsed = payloadSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     return Response.json(

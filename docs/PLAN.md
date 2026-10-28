@@ -376,6 +376,7 @@ publik — semua sudah masuk.
 - Nomor pesanan berurutan per hari dan bergantung pada zona Asia/Jakarta.
 - Refund tidak mengubah kas seharusnya shift (lihat P1).
 - Throttle login hilang saat cold start serverless.
+- Throttle self-order (10 pesanan/menit/IP) juga hilang saat cold start serverless.
 - Laporan memakai SQL agregasi PostgreSQL (`to_char(... AT TIME ZONE)`).
 - Penjualan offline dapat menyebabkan oversell; stok dikoreksi manual.
 - Data pelanggan tidak memiliki alamat; cukup untuk loyalitas dasar.
