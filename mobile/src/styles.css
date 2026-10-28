@@ -1607,3 +1607,34 @@ h2 {
   text-align: left;
   cursor: pointer;
 }
+
+/* Pindai barcode lewat kamera */
+.scan-modal {
+  width: min(92vw, 420px);
+}
+.scan-video {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  background: #111;
+  border-radius: 10px;
+  object-fit: cover;
+}
+.scan-frame-hint {
+  display: flex;
+  justify-content: center;
+  color: var(--oxide, #8d2f0c);
+}
+.spin-slow {
+  animation: scan-sweep 1.6s ease-in-out infinite;
+}
+@keyframes scan-sweep {
+  0%, 100% { transform: translateY(-8px); opacity: 0.6; }
+  50% { transform: translateY(8px); opacity: 1; }
+}
+.search-scan {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  color: var(--ink, #2a2622);
+}

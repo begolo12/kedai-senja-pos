@@ -117,3 +117,17 @@ divalidasi ulang di server), tukar poin (nilai tukar dari pengaturan toko),
 dan tunda tiket (parkir pesanan di `localStorage`, tahan restart).
 Kontrak sync bertambah field opsional (`customerId`, `pointsRedeem`,
 `voucherCode`) dengan default aman — versi app lama tetap diterima server.
+
+## Fitur perangkat (baru)
+
+- **Pindai barcode lewat kamera**: tombol ikon pemindai di kolom cari kasir
+  membuka kamera belakang (BarcodeDetector API, tersedia di Android WebView
+  modern). Kode yang terbaca otomatis menambah produk; bila tidak dikenal,
+  kodenya diisikan ke kolom cari untuk diperiksa manual. Di perangkat tanpa
+  dukungan, tombol disembunyikan — pencarian ketik tetap tersedia.
+- **Umpan balik haptic**: getaran singkat saat pembayaran diterima dan pola
+  tiga denyut saat barcode terbaca (aman di perangkat tanpa getar).
+- **Relasi pelanggan offline**: pesanan dengan pelanggan buatan offline
+  dikirim dengan `customerClientId`; server menyambungkannya ke pelanggan
+  yang diunggah pada sync yang sama — poin dan total belanja tercatat tanpa
+  harus menunggu pelanggan naik lebih dulu.

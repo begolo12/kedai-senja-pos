@@ -132,6 +132,8 @@ export async function listCustomers(): Promise<Customer[]> {
   ]);
   const merged: Customer[] = server.map((customer) => ({ ...customer }));
   for (const entry of local) {
+    // Entri yang sudah punya serverId diwakili baris server dari snapshot.
+    if (entry.serverId) continue;
     if (!merged.some((customer) => customer.id === entry.id)) {
       merged.push({
         id: entry.id,
@@ -162,14 +164,27 @@ export async function pendingLocalCustomers(): Promise<LocalCustomer[]> {
   return db.localCustomers.where("clientId").notEqual("").filter((entry) => entry.pendingUpload).toArray();
 }
 
-/** Setelah sinkron: pelanggan sudah ada di snapshot server; hapus salinan lokalnya. */
+/**
+ * Setelah sinkron: pelanggan sudah ada di snapshot server; simpan serverId di
+ * entri lokal supaya pilihan kasir dan relasi pesanan tetap tersambung.
+ */
 export async function reconcileLocalCustomers(
   results: { clientId: string; status: "created" | "exists"; id?: number }[],
 ) {
   for (const result of results) {
     const entries = await db.localCustomers.where("clientId").equals(result.clientId).toArray();
     for (const entry of entries) {
-      await db.localCustomers.delete(entry.id);
+      await db.localCustomers.put({
+        ...entry,
+        serverId: result.id ?? entry.serverId,
+        pendingUpload: false,
+      });
     }
   }
+}
+
+/** Id server dari id lokal pelanggan (bila sudah terunggah). */
+export async function serverIdForLocalCustomer(localId: number): Promise<number | null> {
+  const entry = await db.localCustomers.get(localId);
+  return entry?.serverId ?? null;
 }

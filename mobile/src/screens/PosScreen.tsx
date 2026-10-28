@@ -1,7 +1,9 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
-import { ArrowRight, Pause, ShoppingBag, TicketPercent, X } from "lucide-react";
+import { ArrowRight, Pause, ScanLine, ShoppingBag, TicketPercent, X } from "lucide-react";
 import { computeTotals, formatMoney, formatNumber, parseMoneyInput } from "../lib/money";
+import { db } from "../lib/db";
+import { CameraScan, cameraScanSupported } from "../components/camera-scan";
 import type { Category, Customer, Product, Settings, Voucher } from "../lib/types";
 
 export type CartLine = { id: string; product: Product; qty: number; note: string };
@@ -84,6 +86,7 @@ export function PosScreen({
   const [optionProduct, setOptionProduct] = useState<Product | null>(null);
   const [optionChoice, setOptionChoice] = useState("");
   const [optionNote, setOptionNote] = useState("");
+  const [scanOpen, setScanOpen] = useState(false);
   const [customerId, setCustomerId] = useState<number | null>(
     restore?.customerId ?? null,
   );
@@ -103,6 +106,16 @@ export function PosScreen({
   const searchRef = useRef<HTMLInputElement>(null);
 
   const customer = customers.find((entry) => entry.id === customerId) ?? null;
+
+  // Id lokal negatif yang sudah terunggah: alihkan pilihan ke id server
+  // supaya nama pelanggan tetap tampil setelah sinkron.
+  useEffect(() => {
+    if (customerId === null || customerId >= 0) return;
+    void (async () => {
+      const serverId = (await db.localCustomers.get(customerId))?.serverId;
+      if (serverId) setCustomerId(serverId);
+    })();
+  }, [customerId]);
 
   const subtotal = cart.reduce(
     (sum, line) => sum + line.product.price * line.qty,
@@ -183,6 +196,18 @@ export function PosScreen({
     }
     onAdd(product);
     setQuery("");
+  }
+
+  function findAndAddByCode(code: string) {
+    const q = code.trim().toLowerCase();
+    if (!q) return false;
+    const exact = products.find(
+      (product) =>
+        product.barcode?.toLowerCase() === q || product.sku.toLowerCase() === q,
+    );
+    if (!exact) return false;
+    chooseProduct(exact);
+    return true;
   }
 
   function submitSearch(event: React.FormEvent) {
@@ -288,6 +313,16 @@ export function PosScreen({
             placeholder="Cari produk, SKU, atau barcode…"
             aria-label="Cari produk"
           />
+          <button
+            type="button"
+            onClick={() => setScanOpen(true)}
+            aria-label="Pindai barcode dengan kamera"
+            title="Pindai barcode"
+            className="search-scan"
+            style={cameraScanSupported() ? undefined : { display: "none" }}
+          >
+            <ScanLine size={16} />
+          </button>
           <button type="submit" aria-label="Tambahkan hasil teratas">
             ↵
           </button>
@@ -729,6 +764,19 @@ export function PosScreen({
             </button>
           </div>
         </div>
+      ) : null}
+
+      {scanOpen ? (
+        <CameraScan
+          onDetect={(code) => {
+            setScanOpen(false);
+            if (!findAndAddByCode(code)) {
+              // Kode tidak dikenal: tampilkan di kolom cari supaya kasir bisa cek manual.
+              setQuery(code);
+            }
+          }}
+          onClose={() => setScanOpen(false)}
+        />
       ) : null}
     </div>
   );

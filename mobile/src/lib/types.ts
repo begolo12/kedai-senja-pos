@@ -52,6 +52,8 @@ export type LocalCustomer = {
   phone: string | null;
   points: number;
   pendingUpload: boolean;
+  /** Id server setelah terunggah — pilihan kasir tetap tersambung. */
+  serverId?: number;
 };
 
 export type Voucher = {
@@ -101,6 +103,8 @@ export type PendingOrder = {
   paymentMethod: "cash" | "card" | "qris";
   amountPaid: number;
   changeDue: number;
+  /** Hubungan ke pelanggan buatan offline: clientId dipakai server setelah unggahan. */
+  customerClientId?: string;
   customerId?: number | null;
   pointsRedeem?: number;
   voucherCode?: string;

@@ -53,6 +53,8 @@ const orderSchema = z.object({
   amountPaid: z.number().int().min(0),
   changeDue: z.number().int().min(0),
   customerId: z.number().int().positive().nullable().optional(),
+  /** Pelanggan buatan offline: dihubungkan setelah unggahan newCustomers. */
+  customerClientId: z.string().uuid().nullable().optional(),
   pointsRedeem: z.number().int().min(0).max(100_000).default(0),
   voucherCode: z
     .string()
@@ -190,6 +192,7 @@ async function pushOrder(
   userId: number,
   storeId: number,
   input: OrderInput,
+  customerMap: Map<string, number>,
 ): Promise<SyncResult> {
   const existing = await db
     .select({ id: orders.id, number: orders.number, storeId: orders.storeId })
@@ -241,7 +244,10 @@ async function pushOrder(
     );
   }
 
-  const customerId: number | null = input.customerId ?? null;
+  // Pelanggan buatan offline: sambungkan lewat hasil unggahan newCustomers.
+  const customerId: number | null =
+    input.customerId ??
+    (input.customerClientId ? customerMap.get(input.customerClientId) ?? null : null);
   let customerPoints = 0;
   let customerSpent = 0;
   if (customerId) {
@@ -482,9 +488,15 @@ export async function POST(request: Request) {
   );
 
   const results: SyncResult[] = [];
+  const customerMap = new Map<string, number>();
+  for (const entry of customerResults) {
+    if (entry.id) customerMap.set(entry.clientId, entry.id);
+  }
   for (const order of parsed.data.orders) {
     try {
-      results.push(await pushOrder(context.user.id, context.store.id, order));
+      results.push(
+        await pushOrder(context.user.id, context.store.id, order, customerMap),
+      );
     } catch (error) {
       results.push({
         clientId: order.clientId,

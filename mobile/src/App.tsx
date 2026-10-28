@@ -20,6 +20,7 @@ import {
 } from "./lib/db";
 import { ApiError, sync, type LoginResult } from "./lib/api";
 import { computeTotals, formatMoney, formatTime } from "./lib/money";
+import { haptic } from "./lib/haptic";
 import { printOrder } from "./lib/thermal";
 import { clearSession, readSession, writeSession, type Session } from "./lib/storage";
 import { checkForUpdate, downloadAndInstall, APP_VERSION, type UpdateInfo } from "./lib/update";
@@ -278,6 +279,22 @@ export default function App() {
 
   async function checkout(input: CheckoutInput) {
     if (!data) return;
+    // Pelanggan buatan offline (id lokal negatif): pakai serverId bila sudah
+    // terunggah, kalau belum ikat lewat clientId agar server menyambungkannya
+    // setelah unggahan newCustomers pada sync yang sama.
+    let customerClientId: string | undefined;
+    let customerId = input.customerId;
+    if (customerId !== null && customerId < 0) {
+      const local = await db.localCustomers.get(customerId);
+      if (local?.serverId) {
+        customerId = local.serverId;
+      } else if (local) {
+        customerClientId = local.clientId;
+        customerId = null;
+      } else {
+        customerId = null;
+      }
+    }
     const subtotal = cart.reduce(
       (sum, line) => sum + line.product.price * line.qty,
       0,
@@ -325,7 +342,8 @@ export default function App() {
       paymentMethod: input.method,
       amountPaid: input.method === "cash" ? input.amountPaid : totals.total,
       changeDue: (input.method === "cash" ? input.amountPaid : totals.total) - totals.total,
-      customerId: input.customerId,
+      customerClientId,
+      customerId,
       pointsRedeem: input.pointsRedeem,
       voucherCode: input.voucherCode ?? undefined,
       createdAt: new Date().toISOString(),
@@ -344,6 +362,7 @@ export default function App() {
     if (fresh) setData(fresh);
     setCart([]);
     setReceipt(order);
+    haptic(50);
     await refreshCounts();
     void syncNow();
   }

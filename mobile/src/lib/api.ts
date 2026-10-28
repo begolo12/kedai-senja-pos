@@ -98,6 +98,7 @@ export function sync(
         orderType: order.orderType,
         tableLabel: order.tableLabel,
         customerId: order.customerId ?? null,
+        customerClientId: order.customerClientId ?? null,
         pointsRedeem: order.pointsRedeem ?? 0,
         voucherCode: order.voucherCode ?? "",
         createdAt: order.createdAt,
