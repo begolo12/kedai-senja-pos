@@ -8,6 +8,20 @@
       "when": 1793097477321,
       "tag": "0000_groovy_rhino",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1793123438650,
+      "tag": "0001_abandoned_hannibal_king",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793159061298,
+      "tag": "0002_wooden_paibok",
+      "breakpoints": true
     }
   ]
 }

@@ -21,6 +21,7 @@ export type SettingsValues = {
   receiptWidth: "58" | "80";
   qrisPayload: string;
   pointsPerAmount: number;
+  pointsValue: number;
 };
 
 export function SettingsForm({ settings }: { settings: SettingsValues }) {
@@ -28,6 +29,7 @@ export function SettingsForm({ settings }: { settings: SettingsValues }) {
   const [values, setValues] = useState(settings);
   const [tax, setTax] = useState(String(settings.taxRate / 100));
   const [points, setPoints] = useState(String(Math.round(settings.pointsPerAmount / 100)));
+  const [pointsValue, setPointsValue] = useState(String(Math.round(settings.pointsValue / 100)));
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -49,6 +51,7 @@ export function SettingsForm({ settings }: { settings: SettingsValues }) {
         receiptWidth: values.receiptWidth,
         qrisPayload: values.qrisPayload,
         pointsPerAmount: parseMoneyInput(points),
+        pointsValue: parseMoneyInput(pointsValue),
       });
       if (!result.ok) {
         setError(result.error);
@@ -105,6 +108,21 @@ export function SettingsForm({ settings }: { settings: SettingsValues }) {
             className="font-mono"
           />
           <p className="text-[11px] text-muted-foreground">Contoh: 10.000 berarti tiap Rp 10.000 dapat 1 poin.</p>
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="pointsValue" className="text-[10px] tracking-[0.12em] text-muted-foreground uppercase">
+            Nilai tukar 1 poin (Rp)
+          </Label>
+          <Input
+            id="pointsValue"
+            value={formatNumber(parseMoneyInput(pointsValue) / 100)}
+            onChange={(e) => setPointsValue(e.target.value.replace(/[^\d]/g, ""))}
+            inputMode="numeric"
+            className="font-mono"
+          />
+          <p className="text-[11px] text-muted-foreground">
+            0 = tukar poin dimatikan. Contoh: 500 berarti 1 poin = Rp 500 potongan saat checkout.
+          </p>
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="width" className="text-[10px] tracking-[0.12em] text-muted-foreground uppercase">

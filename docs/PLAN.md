@@ -1,4 +1,4 @@
-# Rencana Produk — Kedai Senja POS
+# Rencana Produk — Tera POS
 
 POS untuk kedai kopi satu lokasi: kasir cepat di meja, kontrol stok yang bisa
 diaudit, laporan harian, dan tablet kasir offline-first. Web memakai
@@ -43,9 +43,7 @@ Actions, update dari GitHub Releases. Detail: `docs/MOBILE.md`.
 **Deploy:** Vercel (web) + Neon (Postgres). Migrasi dan seed dijalankan
 eksplisit lewat `pnpm db:setup`; tidak ada DDL otomatis di request path.
 
-## 3. Fitur P0 (semua terimplementasi)
 
-### 3.1 Kasir
 - Login username + PIN, sesi 12 jam, logout.
 - Shift wajib: kasir terkunci sampai shift dibuka dengan kas awal.
 - Katalog aktif + filter kategori + pencarian nama/SKU/barcode.
@@ -61,16 +59,21 @@ eksplisit lewat `pnpm db:setup`; tidak ada DDL otomatis di request path.
 - QRIS merchant: unggah gambar di Pengaturan, tampil saat pembayaran.
 - Impor menu CSV/Excel paste; kategori otomatis; update by nama.
 - Pajak dari pengaturan, dihitung setelah diskon.
-- Pembayaran tunai (kembalian + pintasan nominal), QRIS, kartu.
+- Pembayaran tunai (kembalian + pintasan nominal), QRIS, kartu, atau
+  **campuran** (split): beberapa metode sekaligus; kembalian dihitung dari
+  porsi tunai, baris pembayaran tersimpan di `order_payments`.
 - Idempotensi lewat `clientId` UUID: klik ganda tidak membuat dua pesanan.
 - Struk 80 mm siap cetak (print CSS), menampilkan kembalian besar setelah
   pembayaran.
 
 ### 3.2 Pesanan
-- Daftar dengan filter tanggal, status, pencarian nomor/pelanggan.
+- Daftar dengan filter tanggal, status (selesai/refund parsial/refund),
+  pencarian nomor/pelanggan.
 - Detail pesanan: item, totals, kasir, shift, pelanggan, modal, laba, poin.
-- Refund khusus admin: stok dikembalikan, poin dan total belanja pelanggan
-  dikurangi, status dan pelaku tercatat.
+- Refund khusus admin: **penuh atau parsial per item** — pilih item dan
+  jumlahnya; stok dikembalikan, poin dan total belanja pelanggan dikoreksi
+  proporsional, status (`refunded` / `partially_refunded`) dan pelaku
+  tercatat.
 - Cetak ulang struk.
 
 ### 3.3 Produk & kategori (admin)
@@ -82,6 +85,13 @@ eksplisit lewat `pnpm db:setup`; tidak ada DDL otomatis di request path.
 - Impor massal: nama, kategori, harga, modal, stok, satuan, pilihan.
 - Tabel menampilkan margin dan nilai stok.
 
+### 3.3b Pembelian (purchase order)
+- CRUD supplier (manajemen, menu Pembelian): nama unik per toko, telepon,
+  catatan, aktif/nonaktif.
+- Buat PO: supplier, tanggal estimasi tiba, item (produk, qty, harga beli).
+- Terima PO: stok naik otomatis + movement `restock` refType `purchase`;
+  batalkan PO selama belum diterima.
+
 ### 3.4 Stok
 - Daftar stok dengan status aman/menipis/habis.
 - Penyesuaian manual: tambah/kurangi + alasan (restock, koreksi, rusak) +
@@ -89,15 +99,27 @@ eksplisit lewat `pnpm db:setup`; tidak ada DDL otomatis di request path.
 - Jejak audit 40 pergerakan terakhir beserta pelaku.
 - Penjualan dan refund otomatis menulis pergerakan stok.
 
-### 3.5 Pelanggan
+### 3.5 Pelanggan & loyalitas
 - CRUD nama, telepon unik, email; poin dan total belanja.
 - Poin otomatis saat checkout; dikurangi saat refund.
+- **Tukar poin**: potongan checkout dari poin pelanggan; nilai tukar per
+  1 poin diatur di Pengaturan (0 = fitur mati). Refund mengembalikan poin
+  yang ditukar dan mengurangi poin yang didapat.
 - Pencarian nama/telepon, ringkasan poin beredar.
+
+### 3.5b Promo (voucher)
+- CRUD voucher kode (manajemen, menu Promo): persen/nominal, belanja minimal,
+  periode berlaku, batas pemakaian, aktif/nonaktif (bukan hapus).
+- Kasir mengetik kode di tiket; potongan digabung dengan diskon manual dan
+  tukar poin; total potongan tidak melebihi subtotal. Semua divalidasi ulang
+  di server. Refund membebaskan kuota kembali.
 
 ### 3.6 Shift
 - Satu shift terbuka per kasir; buka dengan kas awal.
-- Ringkasan penjualan, tunai masuk, transaksi, kas seharusnya.
-- Tutup shift: hitung uang fisik, selisih otomatis, catatan.
+- Ringkasan penjualan, tunai masuk (dari `order_payments`), transaksi,
+  kas seharusnya.
+- Tutup shift: hitung uang fisik, selisih otomatis, catatan. **Refund tunai
+  mengurangi kas seharusnya** (proporsional porsi tunai pesanan).
 - Riwayat 12 shift terakhir; admin melihat semua kasir.
 
 ### 3.7 Laporan (admin)
@@ -105,7 +127,15 @@ eksplisit lewat `pnpm db:setup`; tidak ada DDL otomatis di request path.
 - KPI: pendapatan, laba kotor, rata-rata pesanan, refund.
 - Tren harian (chart), komposisi metode bayar, pendapatan per kategori,
   produk terlaris, performa kasir.
+- **Jam sibuk**: pendapatan per jam (zona Asia/Jakarta) + label jam tersibuk.
 - Ekspor CSV (pesanan + item) dengan BOM untuk Excel.
+
+### 3.7b Tiket tertunda & struk digital
+- **Tunda tiket**: tiket aktif disimpan di perangkat (tahan refresh), bisa
+  diambil atau dibuang; berguna saat pelanggan kembali atau rombongan
+  bergantian bayar.
+- Struk digital via **WhatsApp** dari halaman struk (butuh nomor pelanggan;
+  nomor 08 dinormalisasi ke 62).
 
 ### 3.8 Pengaturan & staf (admin)
 - Identitas toko, alamat, telepon, footer struk.
@@ -161,7 +191,7 @@ epoch milidetik.
 | `products` | storeId, sku, barcode, name, categoryId, price, cost, stock, lowStockAt, unit, options, active | SKU/barcode unik per toko |
 | `customers` | storeId, name, phone, email, points, totalSpent | telepon unik per toko |
 | `shifts` | storeId, userId, openedAt, closedAt, openingFloat, countedCash, expectedCash, status | Satu `open` per user+toko |
-| `orders` | storeId, number, clientId unik, shiftId, userId, customerId, subtotal, discount*, taxAmount, total, costTotal, pointsEarned, orderType, tableLabel, paymentMethod, amountPaid, changeDue, status, refunded* | nomor unik per toko, harian `KDJ-YYMMDD-NNN` |
+| `orders` | storeId, number, clientId unik, shiftId, userId, customerId, subtotal, discount*, taxAmount, total, costTotal, pointsEarned, orderType, tableLabel, paymentMethod, amountPaid, changeDue, status, refunded* | nomor unik per toko, harian `TRA-YYMMDD-NNN` |
 | `order_items` | orderId, productId, name, sku, unitPrice, cost, qty, note, lineTotal | Snapshot nama/harga + varian/catatan |
 | `stock_movements` | storeId, productId, delta, reason, refType/refId, userId, note | Audit append-only per toko |
 | `stores` | code unik, name, address, phone, taxRate, receiptWidth, qrisPayload, receiptFooter, pointsPerAmount, active | Konfigurasi + identitas per toko |
@@ -211,11 +241,12 @@ internal tambahan selain ekspor CSV.
 | Action | File | Akses |
 | --- | --- | --- |
 | `loginAction`, `logoutAction` | `actions/auth.ts` | publik / sesi |
-| `checkoutAction`, `refundOrderAction` | `actions/sales.ts` | kasir+ (refund admin) |
+| `checkoutAction`, `refundOrderAction`, `refundOrderItemsAction` | `actions/sales.ts` | kasir+ (refund admin) |
 | `saveProductAction`, `toggleProductAction`, `saveCategoryAction`, `deleteCategoryAction` | `actions/catalog.ts` | admin |
 | `adjustStockAction` | `actions/inventory.ts` | admin |
 | `saveCustomerAction` | `actions/customers.ts` | kasir+ |
 | `openShiftAction`, `closeShiftAction` | `actions/shifts.ts` | kasir+ |
+| `saveSupplierAction`, `toggleSupplierAction`, `createPurchaseOrderAction`, `receivePurchaseOrderAction`, `cancelPurchaseOrderAction` | `actions/purchases.ts` | admin |
 | `updateSettingsAction` | `actions/settings.ts` | admin |
 | `saveStaffAction`, `toggleStaffAction` | `actions/staff.ts` | admin |
 
@@ -235,7 +266,8 @@ kotak, garis putus-putus seperti struk.
 - Sesi: HMAC-SHA256 atas payload `{uid, exp}`, cookie HttpOnly, SameSite
   Lax, Secure di produksi, umur 12 jam. Secret dari `AUTH_SECRET`
   (wajib ≥ 16 karakter di produksi).
-- Throttle login 6 percobaan / 5 menit per username (in-memory; lihat §11).
+- Throttle login 6 percobaan / 5 menit per username, tersimpan di tabel
+  `login_attempts` (berlaku lintas instance serverless) + cache memori.
 - Otorisasi diperiksa di setiap action, bukan hanya di UI.
 - CSP/header keamanan belum dipasang (P1), karena deployment awal lokal.
 - Backup: Neon PITR/backup otomatis; untuk ekspor manual gunakan
@@ -261,22 +293,26 @@ kotak, garis putus-putus seperti struk.
 
 ## 11. Di luar P0 & roadmap
 
-### P1 — operasional berikutnya
-- Split payment dan pembayaran campuran.
-- Redemption poin (saat ini poin hanya dikumpulkan).
-- Refund sebagian per item.
-- Purchase order / supplier dan stok masuk terjadwal.
-- Cetak ESC/POS langsung (USB/Bluetooth) + cash drawer.
-- Audit login gagal lintas instance (Redis/Upstash).
-- Backoffice multi-outlet (tambahkan `outletId` di produk/order/shift).
-- Retur penjualan mempengaruhi kas seharusnya di tutup shift.
-- Sinkron dua arah untuk pelanggan yang dibuat offline.
+### P1 — selesai
+Split payment/pembayaran campuran, refund sebagian per item, purchase
+order/supplier, refund tunai mempengaruhi kas seharusnya, audit login gagal
+lintas instance (tabel `login_attempts`), cetak ESC/POS langsung Bluetooth +
+cash drawer (Web Bluetooth di halaman struk), sinkron dua arah pelanggan
+yang dibuat offline, dan paritas tablet (tukar poin, voucher, tunda tiket,
+pelanggan baru offline) — semua sudah masuk.
+
+### P1 — tersisa
+- Cetak ESC/POS via WebUSB (printer kabel) — Bluetooth sudah jalan.
+- Audit login gagal: pembersihan berkala lewat cron, bukan housekeeping
+  saat insert.
 
 ### P2 — pertumbuhan
-- Meja & self-order QR.
-- Membership tier, voucher, dan campaign.
+- Meja (denah, status, pindah/gabung) & self-order QR.
+- Membership tier dan campaign.
 - Integrasi akuntansi/pajak (e-Faktur), payment gateway QRIS dinamis.
 - Barcode label printing, resep & bahan baku (Bill of Materials).
+- Toko online / katalog publik.
+- KDS / order display dapur.
 
 ## 12. Batasan yang diketahui
 

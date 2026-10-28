@@ -3,7 +3,7 @@ import Link from "next/link";
 import { LockKeyhole } from "lucide-react";
 import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { categories, customers, products } from "@/lib/db/schema";
+import { categories, customers, products, vouchers } from "@/lib/db/schema";
 import { requireStore } from "@/lib/auth";
 import { getSettings } from "@/lib/settings";
 import { getOpenShift } from "@/lib/shifts";
@@ -70,6 +70,20 @@ export default async function PosPage() {
     .from(customers)
     .where(eq(customers.storeId, store.id))
     .orderBy(asc(customers.name));
+  const voucherList = await db
+    .select({
+      code: vouchers.code,
+      label: vouchers.label,
+      type: vouchers.type,
+      value: vouchers.value,
+      minSubtotal: vouchers.minSubtotal,
+      startsAt: vouchers.startsAt,
+      endsAt: vouchers.endsAt,
+      usageLimit: vouchers.usageLimit,
+      usedCount: vouchers.usedCount,
+    })
+    .from(vouchers)
+    .where(and(eq(vouchers.storeId, store.id), eq(vouchers.active, true)));
 
   return (
     <div className="mx-auto max-w-[1400px]">
@@ -86,6 +100,8 @@ export default async function PosPage() {
         currency={settings.currency}
         taxRate={settings.taxRate}
         qrisPayload={settings.qrisPayload}
+        pointsValue={settings.pointsValue}
+        vouchers={voucherList}
       />
     </div>
   );

@@ -1,11 +1,11 @@
-# Desain — Kedai Senja POS
+# Desain — Tera POS
 
 Dokumen ini mencatat arah visual, token, state, dan keputusan interaksi.
 Rencana produk ada di `docs/PLAN.md`.
 
 ## 1. Arah: "Counter Ledger"
 
-**Kategori:** perangkat kasir untuk kedai kopi satu lokasi.
+**Kategori:** perangkat kasir untuk warung, kafe, dan toko (satu lokasi).
 **Pengguna di layar pertama:** kasir berdiri, satu tangan di layar sentuh,
 satu tangan memegang produk; pelanggan menunggu.
 **Hal pertama yang harus terbaca:** total pesanan dan tombol bayar.
@@ -141,19 +141,23 @@ Chart memakai animasi bawaan Recharts; tidak ada animasi dekoratif lain.
 - Angka dan status selalu disebut eksplisit; tidak ada "Oops!".
 
 ## 8. Bukti & batas
-
 - Screenshot: `docs/screens/` (login, dashboard, kasir, pembayaran, struk,
-  pesanan, produk, stok, pelanggan, laporan, shift, staf, pengaturan, mobile).
-- Pemeriksaan otomatis: tidak ada error konsol, overflow horizontal, atau
-  gambar gagal muat; kontras lolos setelah perbaikan token.
+  pesanan, produk, stok, pelanggan, laporan, shift, pengaturan, promo, mobile).
+- Pemeriksaan otomatis: tidak ada error konsol, kontras teks lolos setelah
+  token aksen digelapkan.
 - Label mikro uppercase di atas judul dilaporkan oleh pemeriksa sebagai
   "eyebrow". Dipertahankan karena berfungsi sebagai penanda blok data pada
   bahasa buku kas; bukan hiasan.
-- Tinjauan visual independen belum dilakukan: lingkungan ini tidak dapat
-  menampilkan gambar ke peninjau. Yang tersedia adalah inspeksi DOM,
-  screenshot tersimpan, dan lint visual otomatis.
+- Tinjauan visual independen: lingkungan ini tidak dapat menampilkan gambar
+  ke peninjau. Yang tersedia adalah inspeksi DOM, screenshot tersimpan, dan
+  lint visual otomatis.
 - Layar 200% zoom belum diuji terpisah; layout memakai satuan rem dan tidak
   mengunci tinggi teks.
+- Identitas produk (nama, logo, tagline): `docs/BRAND.md`. Arah visual di
+  dokumen ini tidak berubah; brand Tera memakai bahasa yang sama (stempel,
+  struk, tinta). Nama dagang di seluruh UI: **Tera POS**; contoh data memakai
+  "Warkop Berkah".
+
 ## 9. Tablet & APK
 
 Aplikasi Android memakai bahasa visual yang sama dalam ukuran sentuh:

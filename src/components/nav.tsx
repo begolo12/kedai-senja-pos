@@ -11,6 +11,8 @@ import {
   Settings,
   ShoppingBasket,
   Store,
+  TicketPercent,
+  Truck,
   UsersRound,
   UserRoundCog,
 } from "lucide-react";
@@ -27,6 +29,8 @@ const NAV = [
 ] as const;
 
 const ADMIN_ONLY_NAV = [
+  { href: "/vouchers", label: "Promo", icon: TicketPercent },
+  { href: "/purchases", label: "Pembelian", icon: Truck },
   { href: "/stores", label: "Toko", icon: Store },
   { href: "/staff", label: "Staf", icon: UserRoundCog },
   { href: "/settings", label: "Pengaturan", icon: Settings },

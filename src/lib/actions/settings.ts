@@ -28,6 +28,7 @@ export async function updateSettingsAction(input: unknown): Promise<ActionResult
       qrisPayload: data.qrisPayload,
       receiptFooter: data.receiptFooter,
       pointsPerAmount: data.pointsPerAmount,
+      pointsValue: data.pointsValue,
     })
     .where(eq(stores.id, auth.store.id));
 

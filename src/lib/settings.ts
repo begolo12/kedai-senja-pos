@@ -14,7 +14,7 @@ export type StoreSettings = {
   receiptWidth: "58" | "80";
   qrisPayload: string;
   pointsPerAmount: number;
-  updatedAt: Date;
+  pointsValue: number;
 };
 
 export const getSettings = cache(async (storeId: number): Promise<StoreSettings> => {
@@ -38,6 +38,6 @@ export const getSettings = cache(async (storeId: number): Promise<StoreSettings>
     receiptWidth: store.receiptWidth,
     qrisPayload: store.qrisPayload,
     pointsPerAmount: store.pointsPerAmount,
-    updatedAt: store.createdAt,
+    pointsValue: store.pointsValue,
   };
 });

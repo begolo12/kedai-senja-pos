@@ -26,10 +26,12 @@ export function computeTotals(
   {
     discountType = null,
     discountValue = 0,
+    fixedDiscount = 0,
     taxRate = 0,
   }: {
     discountType?: "amount" | "percent" | null;
     discountValue?: number;
+    fixedDiscount?: number;
     taxRate?: number;
   } = {},
 ) {
@@ -43,7 +45,10 @@ export function computeTotals(
       : discountType === "amount"
         ? Math.max(0, Math.round(discountValue))
         : 0;
-  const discountAmount = Math.min(subtotal, rawDiscount);
+  const discountAmount = Math.min(
+    subtotal,
+    rawDiscount + Math.max(0, Math.round(fixedDiscount)),
+  );
   const taxable = subtotal - discountAmount;
   const taxAmount = Math.round((taxable * clamp(taxRate, 0, 10000)) / 10000);
   return {

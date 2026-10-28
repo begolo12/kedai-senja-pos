@@ -1,4 +1,11 @@
-import type { MobileStore, MobileUser, PendingOrder, Snapshot, SyncResult } from "./types";
+import type {
+  CustomerSyncResult,
+  MobileStore,
+  MobileUser,
+  PendingOrder,
+  Snapshot,
+  SyncResult,
+} from "./types";
 
 const API_URL = (import.meta.env.VITE_API_URL ?? "http://localhost:3000").replace(/\/+$/, "");
 
@@ -62,9 +69,14 @@ export type SyncResponse = Snapshot & {
   user: MobileUser;
   store: MobileStore;
   results: SyncResult[];
+  customerResults?: CustomerSyncResult[];
 };
 
-export function sync(token: string, orders: PendingOrder[]) {
+export function sync(
+  token: string,
+  orders: PendingOrder[],
+  newCustomers: { clientId: string; name: string; phone?: string }[] = [],
+) {
   return request<SyncResponse>("/api/mobile/sync", {
     method: "POST",
     headers: { authorization: `Bearer ${token}` },
@@ -85,9 +97,13 @@ export function sync(token: string, orders: PendingOrder[]) {
         changeDue: order.changeDue,
         orderType: order.orderType,
         tableLabel: order.tableLabel,
+        customerId: order.customerId ?? null,
+        pointsRedeem: order.pointsRedeem ?? 0,
+        voucherCode: order.voucherCode ?? "",
         createdAt: order.createdAt,
         note: order.note,
       })),
+      newCustomers,
     }),
   });
 }

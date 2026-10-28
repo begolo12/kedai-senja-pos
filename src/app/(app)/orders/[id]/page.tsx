@@ -62,8 +62,19 @@ export default async function OrderDetailPage({ params }: PageProps<"/orders/[id
             <Button nativeButton={false} variant="outline" render={<Link href={`/receipt/${order.id}`} />}>
               <Printer /> Struk
             </Button>
-            {user.role === "admin" && order.status === "completed" ? (
-              <RefundButton orderId={order.id} number={order.number} />
+            {user.role === "admin" && order.status !== "refunded" ? (
+              <RefundButton
+                orderId={order.id}
+                number={order.number}
+                currency={settings.currency}
+                items={items.map((item) => ({
+                  id: item.id,
+                  name: item.name,
+                  qty: item.qty,
+                  refundedQty: item.refundedQty,
+                  unitPrice: item.unitPrice,
+                }))}
+              />
             ) : null}
           </>
         }
@@ -71,10 +82,22 @@ export default async function OrderDetailPage({ params }: PageProps<"/orders/[id
 
       {order.status === "refunded" ? (
         <div className="border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm">
-          <p className="font-medium text-destructive">Pesanan ini sudah direfund.</p>
+          <p className="font-medium text-destructive">Pesanan ini sudah direfund penuh.</p>
           <p className="mt-0.5 text-xs text-muted-foreground">
             {order.refundedAt ? formatDateTime(order.refundedAt) : ""}
             {refunder ? ` oleh ${refunder.name}` : ""}. Stok sudah dikembalikan.
+          </p>
+        </div>
+      ) : order.status === "partially_refunded" ? (
+        <div className="border border-signal/40 bg-signal/5 px-4 py-3 text-sm">
+          <p className="font-medium text-signal">
+            Refund parsial · {formatMoney(order.refundedTotal, settings.currency)} sudah
+            dikembalikan.
+          </p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {order.refundedAt ? formatDateTime(order.refundedAt) : ""}
+            {refunder ? ` oleh ${refunder.name}` : ""}. Item yang sudah direfund tidak bisa
+            direfund lagi.
           </p>
         </div>
       ) : null}
@@ -102,7 +125,14 @@ export default async function OrderDetailPage({ params }: PageProps<"/orders/[id
                     {item.note ? <p className="text-[11px] text-signal">{item.note}</p> : null}
                     <p className="font-mono text-[10px] text-muted-foreground">{item.sku}</p>
                   </td>
-                  <td className="px-3 py-2.5 text-center font-mono text-xs">{item.qty}</td>
+                  <td className="px-3 py-2.5 text-center font-mono text-xs">
+                    {item.qty}
+                    {item.refundedQty > 0 ? (
+                      <span className="ml-1 text-[10px] text-signal">
+                        (−{item.refundedQty})
+                      </span>
+                    ) : null}
+                  </td>
                   <td className="px-3 py-2.5 text-right font-mono text-xs">
                     {formatMoney(item.unitPrice, settings.currency)}
                   </td>
@@ -115,10 +145,22 @@ export default async function OrderDetailPage({ params }: PageProps<"/orders/[id
           </table>
           <dl className="space-y-1 border-t border-border px-5 py-4 text-sm">
             <Row label="Subtotal" value={formatMoney(order.subtotal, settings.currency)} />
-            {order.discountAmount > 0 ? (
+            {(order.discountAmount - order.voucherAmount - order.redeemAmount) > 0 ? (
               <Row
                 label={`Diskon${order.discountType === "percent" ? ` (${order.discountValue}%)` : ""}`}
-                value={`−${formatMoney(order.discountAmount, settings.currency)}`}
+                value={`−${formatMoney(order.discountAmount - order.voucherAmount - order.redeemAmount, settings.currency)}`}
+              />
+            ) : null}
+            {order.voucherAmount > 0 ? (
+              <Row
+                label={`Voucher ${order.voucherCode ?? ""}`}
+                value={`−${formatMoney(order.voucherAmount, settings.currency)}`}
+              />
+            ) : null}
+            {order.pointsRedeemed > 0 ? (
+              <Row
+                label={`Tukar ${order.pointsRedeemed} poin`}
+                value={`−${formatMoney(order.redeemAmount, settings.currency)}`}
               />
             ) : null}
             <Row label={`Pajak ${(settings.taxRate / 100).toLocaleString("id-ID")}%`} value={formatMoney(order.taxAmount, settings.currency)} />
@@ -128,6 +170,12 @@ export default async function OrderDetailPage({ params }: PageProps<"/orders/[id
             </div>
             <Row label="Dibayar" value={formatMoney(order.amountPaid, settings.currency)} />
             <Row label="Kembalian" value={formatMoney(order.changeDue, settings.currency)} />
+            {order.refundedTotal > 0 ? (
+              <Row
+                label="Dikembalikan"
+                value={`−${formatMoney(order.refundedTotal, settings.currency)}`}
+              />
+            ) : null}
           </dl>
         </section>
 
@@ -183,6 +231,12 @@ export default async function OrderDetailPage({ params }: PageProps<"/orders/[id
                   {order.pointsEarned}
                 </dd>
               </div>
+              {order.pointsRedeemed > 0 ? (
+                <div className="flex justify-between">
+                  <dt className="text-muted-foreground">Poin ditukar</dt>
+                  <dd className="font-mono">{order.pointsRedeemed}</dd>
+                </div>
+              ) : null}
             </dl>
           </div>
         </section>

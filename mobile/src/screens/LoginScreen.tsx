@@ -24,18 +24,18 @@ export function LoginScreen({ onLogin }: { onLogin: (result: LoginResult) => voi
   return (
     <div className="login">
       <div className="login-hero">
-        <span className="eyebrow">Kedai Senja · POS</span>
+        <span className="eyebrow">Tera POS · Point of sale</span>
         <h1>
-          Senja selalu ramai.
+          Antre boleh panjang.
           <br />
-          <em>Kasirnya tenang.</em>
+          <em>Semua tetap tertera.</em>
         </h1>
         <p>Tablet kasir. Data tersimpan lokal, tersinkron saat online.</p>
       </div>
       <form className="login-card" onSubmit={submit}>
         <div className="login-brand">
-          <span>KS</span>
-          <strong>Kasir Senja</strong>
+          <img src="/logo.jpg" alt="Logo Tera POS" className="login-logo" />
+          <strong>Tera POS</strong>
         </div>
         <span className="eyebrow">Masuk</span>
         <h2>Selamat datang</h2>

@@ -27,6 +27,9 @@ export const stores = pgTable("stores", {
   pointsPerAmount: bigint("points_per_amount", { mode: "number" })
     .notNull()
     .default(1_000_000),
+  pointsValue: bigint("points_value", { mode: "number" })
+    .notNull()
+    .default(0),
   active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
@@ -184,19 +187,30 @@ export const orders = pgTable(
     total: bigint("total", { mode: "number" }).notNull(),
     costTotal: bigint("cost_total", { mode: "number" }).notNull().default(0),
     pointsEarned: integer("points_earned").notNull().default(0),
+    pointsRedeemed: integer("points_redeemed").notNull().default(0),
+    redeemAmount: bigint("redeem_amount", { mode: "number" }).notNull().default(0),
+    voucherCode: text("voucher_code"),
+    voucherAmount: bigint("voucher_amount", { mode: "number" })
+      .notNull()
+      .default(0),
     orderType: text("order_type", { enum: ["dine_in", "takeaway"] })
       .notNull()
       .default("dine_in"),
     tableLabel: text("table_label"),
     paymentMethod: text("payment_method", {
-      enum: ["cash", "card", "qris"],
+      enum: ["cash", "card", "qris", "mixed"],
     }).notNull(),
     amountPaid: bigint("amount_paid", { mode: "number" }).notNull(),
     changeDue: bigint("change_due", { mode: "number" }).notNull().default(0),
-    status: text("status", { enum: ["completed", "refunded"] })
+    status: text("status", {
+      enum: ["completed", "refunded", "partially_refunded"],
+    })
       .notNull()
       .default("completed"),
     note: text("note"),
+    refundedTotal: bigint("refunded_total", { mode: "number" })
+      .notNull()
+      .default(0),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -226,10 +240,24 @@ export const orderItems = pgTable(
     unitPrice: bigint("unit_price", { mode: "number" }).notNull(),
     cost: bigint("cost", { mode: "number" }).notNull().default(0),
     qty: integer("qty").notNull(),
+    refundedQty: integer("refunded_qty").notNull().default(0),
     note: text("note"),
     lineTotal: bigint("line_total", { mode: "number" }).notNull(),
   },
   (t) => [index("order_items_order_idx").on(t.orderId)],
+);
+
+export const orderPayments = pgTable(
+  "order_payments",
+  {
+    id: serial("id").primaryKey(),
+    orderId: integer("order_id")
+      .notNull()
+      .references(() => orders.id, { onDelete: "cascade" }),
+    method: text("method", { enum: ["cash", "card", "qris"] }).notNull(),
+    amount: bigint("amount", { mode: "number" }).notNull(),
+  },
+  (t) => [index("order_payments_order_idx").on(t.orderId)],
 );
 
 export const stockMovements = pgTable(
@@ -263,12 +291,121 @@ export const stockMovements = pgTable(
   ],
 );
 
+export const vouchers = pgTable(
+  "vouchers",
+  {
+    id: serial("id").primaryKey(),
+    storeId: integer("store_id")
+      .notNull()
+      .references(() => stores.id, { onDelete: "cascade" }),
+    code: text("code").notNull(),
+    label: text("label").notNull().default(""),
+    type: text("type", { enum: ["percent", "fixed"] })
+      .notNull()
+      .default("percent"),
+    value: bigint("value", { mode: "number" }).notNull().default(0),
+    minSubtotal: bigint("min_subtotal", { mode: "number" }).notNull().default(0),
+    startsAt: timestamp("starts_at", { withTimezone: true }),
+    endsAt: timestamp("ends_at", { withTimezone: true }),
+    usageLimit: integer("usage_limit").notNull().default(0),
+    usedCount: integer("used_count").notNull().default(0),
+    active: boolean("active").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [uniqueIndex("vouchers_store_code_idx").on(t.storeId, t.code)],
+);
+
 export type Store = typeof stores.$inferSelect;
 export type Product = typeof products.$inferSelect;
 export type Order = typeof orders.$inferSelect;
 export type OrderItem = typeof orderItems.$inferSelect;
+export type OrderPayment = typeof orderPayments.$inferSelect;
 export type Customer = typeof customers.$inferSelect;
 export type User = typeof users.$inferSelect;
 export type Shift = typeof shifts.$inferSelect;
 export type Category = typeof categories.$inferSelect;
-export type StockMovement = typeof stockMovements.$inferSelect;
+export type Voucher = typeof vouchers.$inferSelect;
+export type Supplier = typeof suppliers.$inferSelect;
+export type PurchaseOrder = typeof purchaseOrders.$inferSelect;
+export type PurchaseOrderItem = typeof purchaseOrderItems.$inferSelect;
+
+export const suppliers = pgTable(
+  "suppliers",
+  {
+    id: serial("id").primaryKey(),
+    storeId: integer("store_id")
+      .notNull()
+      .references(() => stores.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    phone: text("phone").notNull().default(""),
+    note: text("note").notNull().default(""),
+    active: boolean("active").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [uniqueIndex("suppliers_store_name_idx").on(t.storeId, t.name)],
+);
+
+export const purchaseOrders = pgTable(
+  "purchase_orders",
+  {
+    id: serial("id").primaryKey(),
+    storeId: integer("store_id")
+      .notNull()
+      .references(() => stores.id, { onDelete: "cascade" }),
+    supplierId: integer("supplier_id").references(() => suppliers.id, {
+      onDelete: "set null",
+    }),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id),
+    status: text("status", {
+      enum: ["ordered", "received", "cancelled"],
+    })
+      .notNull()
+      .default("ordered"),
+    note: text("note"),
+    totalCost: bigint("total_cost", { mode: "number" }).notNull().default(0),
+    expectedAt: timestamp("expected_at", { withTimezone: true }),
+    receivedAt: timestamp("received_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index("purchase_orders_store_created_idx").on(t.storeId, t.createdAt)],
+);
+
+export const purchaseOrderItems = pgTable(
+  "purchase_order_items",
+  {
+    id: serial("id").primaryKey(),
+    purchaseOrderId: integer("purchase_order_id")
+      .notNull()
+      .references(() => purchaseOrders.id, { onDelete: "cascade" }),
+    productId: integer("product_id").references(() => products.id, {
+      onDelete: "set null",
+    }),
+    name: text("name").notNull(),
+    unit: text("unit").notNull().default("pcs"),
+    qty: integer("qty").notNull(),
+    unitCost: bigint("unit_cost", { mode: "number" }).notNull().default(0),
+    receivedQty: integer("received_qty").notNull().default(0),
+  },
+  (t) => [index("purchase_order_items_po_idx").on(t.purchaseOrderId)],
+);
+
+export const loginAttempts = pgTable(
+  "login_attempts",
+  {
+    id: serial("id").primaryKey(),
+    username: text("username").notNull(),
+    success: boolean("success").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index("login_attempts_username_created_idx").on(t.username, t.createdAt)],
+);

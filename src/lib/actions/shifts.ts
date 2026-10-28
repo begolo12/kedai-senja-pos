@@ -1,11 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { orders, shifts } from "@/lib/db/schema";
+import { shifts } from "@/lib/db/schema";
 import { assertStore, type ActionResult } from "@/lib/auth";
-import { getOpenShift } from "@/lib/shifts";
+import { getOpenShift, getShiftSummary } from "@/lib/shifts";
 import { shiftCloseSchema, shiftOpenSchema } from "@/lib/validation";
 
 export async function openShiftAction(input: unknown): Promise<ActionResult> {
@@ -42,21 +42,8 @@ export async function closeShiftAction(input: unknown): Promise<ActionResult> {
   const shift = await getOpenShift(auth.user.id, auth.store.id);
   if (!shift) return { ok: false, error: "Tidak ada shift terbuka." };
 
-  const cash = (
-    await db
-      .select({ total: sql<string>`coalesce(sum(${orders.total}), 0)` })
-      .from(orders)
-      .where(
-        and(
-          eq(orders.shiftId, shift.id),
-          eq(orders.storeId, auth.store.id),
-          eq(orders.status, "completed"),
-          eq(orders.paymentMethod, "cash"),
-        ),
-      )
-  )[0]?.total;
-
-  const expectedCash = shift.openingFloat + Number(cash ?? 0);
+  const summary = await getShiftSummary(shift.id, auth.store.id);
+  const expectedCash = shift.openingFloat + summary.cashIn - summary.cashRefundOut;
   await db
     .update(shifts)
     .set({

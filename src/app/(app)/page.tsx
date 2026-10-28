@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ArrowRight, Banknote, ChartNoAxesColumn, ReceiptText, TriangleAlert } from "lucide-react";
-import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
+import { and, desc, eq, gte, lt, ne, sql } from "drizzle-orm";
 import { db, rows } from "@/lib/db";
 import { orderItems, orders, products, users } from "@/lib/db/schema";
 import { requireAdmin } from "@/lib/auth";
@@ -27,7 +27,7 @@ export default async function DashboardPage() {
     (
       await db
         .select({
-          revenue: sql<string>`coalesce(sum(${orders.total}), 0)`,
+          revenue: sql<string>`coalesce(sum(${orders.total} - ${orders.refundedTotal}), 0)`,
           cost: sql<string>`coalesce(sum(${orders.costTotal}), 0)`,
           tax: sql<string>`coalesce(sum(${orders.taxAmount}), 0)`,
           count: sql<string>`count(*)`,
@@ -36,7 +36,7 @@ export default async function DashboardPage() {
         .where(
           and(
             eq(orders.storeId, store.id),
-            eq(orders.status, "completed"),
+            ne(orders.status, "refunded"),
             gte(orders.createdAt, new Date(from)),
             lt(orders.createdAt, new Date(to)),
           ),
@@ -53,10 +53,10 @@ export default async function DashboardPage() {
 
   const rawSeries = await rows<RevenuePoint>(sql`
     select to_char(created_at at time zone 'Asia/Jakarta', 'YYYY-MM-DD') as day,
-           coalesce(sum(total), 0) as revenue,
+           coalesce(sum(total - refunded_total), 0) as revenue,
            count(*) as orders
     from orders
-    where store_id = ${store.id} and status = 'completed' and created_at >= ${new Date(weekStart)}
+    where store_id = ${store.id} and status <> 'refunded' and created_at >= ${new Date(weekStart)}
     group by 1
     order by 1
   `);
@@ -104,15 +104,15 @@ export default async function DashboardPage() {
   const topToday = await db
     .select({
       name: orderItems.name,
-      qty: sql<number>`sum(${orderItems.qty})`,
-      revenue: sql<number>`sum(${orderItems.lineTotal})`,
+      qty: sql<number>`sum(${orderItems.qty} - ${orderItems.refundedQty})`,
+      revenue: sql<number>`sum((${orderItems.qty} - ${orderItems.refundedQty}) * ${orderItems.unitPrice})`,
     })
     .from(orderItems)
     .innerJoin(orders, eq(orderItems.orderId, orders.id))
     .where(
       and(
         eq(orders.storeId, store.id),
-        eq(orders.status, "completed"),
+        ne(orders.status, "refunded"),
         gte(orders.createdAt, new Date(today)),
       ),
     )
@@ -268,6 +268,8 @@ export default async function DashboardPage() {
                   <div className="flex items-center gap-3">
                     {order.status === "refunded" ? (
                       <span className="stamp border-destructive/40 text-destructive">Refund</span>
+                    ) : order.status === "partially_refunded" ? (
+                      <span className="stamp border-signal/50 text-signal">Parsial</span>
                     ) : null}
                     <span className="font-mono text-sm tabular">
                       {formatMoney(order.total, settings.currency)}

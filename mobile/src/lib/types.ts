@@ -19,6 +19,7 @@ export type Settings = {
   qrisPayload: string;
   receiptFooter: string;
   pointsPerAmount: number;
+  pointsValue: number;
 };
 
 export type Category = { id: number; name: string; color: string; sortOrder: number };
@@ -36,13 +37,41 @@ export type Product = {
   options: string | null;
 };
 
-export type Customer = { id: number; name: string; phone: string | null; points: number };
+export type Customer = {
+  id: number;
+  name: string;
+  phone: string | null;
+  points: number;
+};
+
+/** Pelanggan buatan offline: id lokal negatif, clientId untuk sinkron naik. */
+export type LocalCustomer = {
+  id: number;
+  clientId: string;
+  name: string;
+  phone: string | null;
+  points: number;
+  pendingUpload: boolean;
+};
+
+export type Voucher = {
+  code: string;
+  label: string;
+  type: "percent" | "fixed";
+  value: number;
+  minSubtotal: number;
+  startsAt: string | null;
+  endsAt: string | null;
+  usageLimit: number;
+  usedCount: number;
+};
 
 export type Snapshot = {
   settings: Settings;
   categories: Category[];
   products: Product[];
   customers: Customer[];
+  vouchers: Voucher[];
   serverTime: string;
 };
 
@@ -72,6 +101,9 @@ export type PendingOrder = {
   paymentMethod: "cash" | "card" | "qris";
   amountPaid: number;
   changeDue: number;
+  customerId?: number | null;
+  pointsRedeem?: number;
+  voucherCode?: string;
   createdAt: string;
   note?: string;
   status: "pending" | "synced" | "rejected";
@@ -86,4 +118,10 @@ export type SyncResult = {
   orderId?: number;
   number?: string;
   error?: string;
+};
+
+export type CustomerSyncResult = {
+  clientId: string;
+  status: "created" | "exists";
+  id?: number;
 };

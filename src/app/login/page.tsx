@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { TeraMark } from "@/components/brand";
 import { ArrowUpRight } from "lucide-react";
 import { getCurrentUser } from "@/lib/auth";
 import { readPending } from "@/lib/session";
@@ -17,35 +18,35 @@ export default async function LoginPage() {
       <section className="relative hidden flex-col justify-between overflow-hidden bg-sidebar p-10 text-sidebar-foreground lg:flex xl:p-14">
         <div>
           <p className="flex items-center gap-2 text-[10px] tracking-[0.24em] text-sidebar-foreground/70 uppercase">
-            <span className="inline-block h-px w-8 bg-sidebar-primary" />
-            Sejak 2019 · Jakarta
+            <TeraMark className="size-6 rounded-[3px] object-cover" />
+            Tera POS · Point of sale
           </p>
           <h1 className="mt-8 max-w-md font-serif text-6xl leading-[0.98] tracking-tight xl:text-7xl">
-            Senja selalu
+            Antre boleh
             <br />
-            <span className="text-sidebar-primary italic">ramai.</span>
+            <span className="text-sidebar-primary italic">panjang.</span>
             <br />
-            Kasirnya tenang.
+            Semua tertera.
           </h1>
           <p className="mt-6 max-w-sm text-sm leading-relaxed text-sidebar-foreground/60">
-            Satu layar untuk pesanan, stok, dan uang laci. Tanpa pindah tab, tanpa
-            hitung ulang.
+            Kasir, stok, shift, dan laporan dalam satu layar. Uang laci cocok
+            saat tutup hari — tanpa hitung ulang.
           </p>
         </div>
 
         <div className="relative mt-12 border-t border-sidebar-border pt-6">
           <div className="grid grid-cols-3 gap-6 text-[10px] tracking-[0.14em] uppercase">
             <div>
-              <p className="text-sidebar-foreground/40">Jam buka</p>
-              <p className="mt-1.5 font-mono text-xs normal-case">07.00 — 22.00</p>
+              <p className="text-sidebar-foreground/40">Kasir</p>
+              <p className="mt-1.5 font-mono text-xs normal-case">&lt; 30 detik</p>
             </div>
             <div>
-              <p className="text-sidebar-foreground/40">Lokasi</p>
-              <p className="mt-1.5 text-xs normal-case">Kebayoran Baru</p>
+              <p className="text-sidebar-foreground/40">Tablet</p>
+              <p className="mt-1.5 font-mono text-xs normal-case">offline-first</p>
             </div>
             <div>
-              <p className="text-sidebar-foreground/40">Meja</p>
-              <p className="mt-1.5 font-mono text-xs normal-case">01 — 12</p>
+              <p className="text-sidebar-foreground/40">Struk</p>
+              <p className="mt-1.5 font-mono text-xs normal-case">58 · 80 mm</p>
             </div>
           </div>
           <div className="pointer-events-none absolute -top-24 right-0 hidden h-56 w-56 border border-sidebar-border/60 xl:block" />
@@ -56,12 +57,15 @@ export default async function LoginPage() {
       <section className="flex flex-col justify-center px-6 py-14 sm:px-12 lg:px-16">
         <div className="mx-auto w-full max-w-sm">
           <div className="flex items-center justify-between lg:hidden">
-            <span className="font-serif text-2xl">{"Kasir Senja"}</span>
+            <span className="flex items-center gap-2 font-serif text-2xl">
+              <TeraMark className="size-7 rounded-[4px] object-cover" />
+              Tera POS
+            </span>
             <span className="stamp border-border text-muted-foreground">POS</span>
           </div>
 
           <p className="mt-10 text-[11px] tracking-[0.18em] text-muted-foreground uppercase lg:mt-0">
-            Meja kasir · {"Kasir Senja"}
+            Meja kasir · Tera POS
           </p>
           <h2 className="mt-2 font-serif text-4xl tracking-tight">Selamat datang</h2>
           <p className="mt-2 mb-8 text-sm text-muted-foreground">

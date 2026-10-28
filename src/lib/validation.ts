@@ -85,9 +85,68 @@ export const checkoutSchema = z.object({
   orderType: z.enum(["dine_in", "takeaway"]),
   tableLabel: z.string().trim().max(40).optional().or(z.literal("")),
   paymentMethod: z.enum(["cash", "card", "qris"]),
+  payments: z
+    .array(
+      z.object({
+        method: z.enum(["cash", "card", "qris"]),
+        amount: z.number().int().min(0),
+      }),
+    )
+    .max(4)
+    .default([]),
   amountPaid: z.number().int().min(0),
   customerId: z.number().int().positive().nullable(),
+  pointsRedeem: z.number().int().min(0).max(100_000).default(0),
+  voucherCode: z
+    .string()
+    .trim()
+    .max(32)
+    .regex(/^[A-Za-z0-9-]*$/, "Kode voucher: huruf, angka, tanda hubung.")
+    .optional()
+    .or(z.literal("")),
   note: z.string().trim().max(200).optional().or(z.literal("")),
+});
+
+export const voucherSchema = z.object({
+  id: z.number().int().positive().optional(),
+  code: z
+    .string()
+    .trim()
+    .min(2, "Kode minimal 2 karakter.")
+    .max(32)
+    .regex(/^[A-Za-z0-9-]+$/, "Kode: huruf, angka, tanda hubung.")
+    .transform((v) => v.toUpperCase()),
+  label: z.string().trim().max(80).optional().or(z.literal("")),
+  type: z.enum(["percent", "fixed"]),
+  value: z.number().int().min(0),
+  minSubtotal: z.number().int().min(0),
+  startsAt: z.string().trim().optional().or(z.literal("")),
+  endsAt: z.string().trim().optional().or(z.literal("")),
+  usageLimit: z.number().int().min(0).max(1_000_000),
+  active: z.boolean(),
+});
+export const supplierSchema = z.object({
+  id: z.number().int().positive().optional(),
+  name: z.string().trim().min(2, "Nama supplier minimal 2 karakter.").max(80),
+  phone: z.string().trim().max(40).optional().or(z.literal("")),
+  note: z.string().trim().max(200).optional().or(z.literal("")),
+  active: z.boolean(),
+});
+
+export const purchaseItemSchema = z.object({
+  productId: z.number().int().positive(),
+  qty: z.number().int().min(1, "Jumlah minimal 1.").max(10_000),
+  unitCost: z.number().int().min(0, "Harga beli tidak boleh negatif."),
+});
+
+export const purchaseOrderSchema = z.object({
+  supplierId: z.number().int().positive().nullable(),
+  note: z.string().trim().max(200).optional().or(z.literal("")),
+  expectedAt: z.string().trim().max(10).optional().or(z.literal("")),
+  items: z
+    .array(purchaseItemSchema)
+    .min(1, "PO butuh minimal satu item.")
+    .max(100),
 });
 
 export const shiftOpenSchema = z.object({
@@ -109,6 +168,7 @@ export const settingsSchema = z.object({
   receiptWidth: z.enum(["58", "80"]),
   qrisPayload: z.string().trim().max(500_000),
   pointsPerAmount: z.number().int().min(0),
+  pointsValue: z.number().int().min(0).max(100_000_000),
 });
 
 export const staffSchema = z.object({

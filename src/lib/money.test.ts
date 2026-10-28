@@ -37,6 +37,30 @@ test("amount discount cannot exceed the subtotal", () => {
   assert.equal(totals.total, 0);
 });
 
+test("fixed discount stacks with manual discount and tax applies after", () => {
+  const totals = computeTotals([latte], {
+    discountType: "amount",
+    discountValue: 100_000,
+    fixedDiscount: 250_000,
+    taxRate: 1100,
+  });
+  assert.equal(totals.discountAmount, 350_000);
+  assert.equal(totals.taxAmount, 577_500);
+  assert.equal(totals.total, 5_827_500);
+});
+
+test("stacked discounts cannot exceed the subtotal", () => {
+  const totals = computeTotals([latte], {
+    discountType: "percent",
+    discountValue: 50,
+    fixedDiscount: 9_999_999,
+    taxRate: 1100,
+  });
+  assert.equal(totals.discountAmount, 5_600_000);
+  assert.equal(totals.taxAmount, 0);
+  assert.equal(totals.total, 0);
+});
+
 test("tax rate clamps to a sane bound", () => {
   const totals = computeTotals([latte], { taxRate: 99_999 });
   assert.equal(totals.taxAmount, 5_600_000);
@@ -51,8 +75,8 @@ test("money input tolerates rupiah formatting", () => {
 test("order numbers roll over at Jakarta midnight", () => {
   const lateNight = new Date("2026-10-27T16:30:00Z"); // 23:30 WIB
   const afterMidnight = new Date("2026-10-27T17:30:00Z"); // 00:30 WIB next day
-  assert.equal(orderNumber(lateNight, 7), "KDJ-261027-007");
-  assert.equal(orderNumber(afterMidnight, 1), "KDJ-261028-001");
+  assert.equal(orderNumber(lateNight, 7), "TRA-261027-007");
+  assert.equal(orderNumber(afterMidnight, 1), "TRA-261028-001");
 });
 
 test("csv escapes delimiters, quotes, and newlines", () => {

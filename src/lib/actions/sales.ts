@@ -6,10 +6,12 @@ import { db } from "@/lib/db";
 import {
   customers,
   orderItems,
+  orderPayments,
   orders,
   products,
   shifts,
   stockMovements,
+  vouchers,
 } from "@/lib/db/schema";
 import { assertAdmin, assertStore } from "@/lib/auth";
 import { computeTotals, orderNumber } from "@/lib/money";
@@ -19,6 +21,21 @@ import { checkoutSchema } from "@/lib/validation";
 export type CheckoutResult =
   | { ok: true; orderId: number; number: string; changeDue: number; total: number }
   | { ok: false; error: string };
+
+/**
+ * Normalises the two wire shapes into payment rows: split list or legacy single.
+ * Rows store the *applied* amount: the cash row is net of change, so summing
+ * rows equals the order total and shift cash math stays correct.
+ */
+function toPayments(
+  data: { payments?: { method: "cash" | "card" | "qris"; amount: number }[] },
+  fallbackMethod: "cash" | "card" | "qris",
+  total: number,
+): { method: "cash" | "card" | "qris"; amount: number }[] {
+  const list = (data.payments ?? []).filter((p) => p.amount > 0);
+  if (list.length > 0) return list;
+  return [{ method: fallbackMethod, amount: total }];
+}
 
 export async function checkoutAction(input: unknown): Promise<CheckoutResult> {
   const auth = await assertStore();
@@ -108,23 +125,60 @@ export async function checkoutAction(input: unknown): Promise<CheckoutResult> {
       note,
       lineTotal: product!.price * qty,
     }));
-    const taxRate = store.taxRate;
-    const totals = computeTotals(
-      lines.map((l) => ({ unitPrice: l.product.price, qty: l.qty })),
-      { discountType: data.discountType, discountValue: data.discountValue, taxRate },
-    );
+    const subtotal = lines.reduce((sum, l) => sum + l.product.price * l.qty, 0);
+    const rawManual =
+      data.discountType === "percent"
+        ? Math.round((subtotal * Math.min(100, Math.max(0, data.discountValue))) / 100)
+        : data.discountType === "amount"
+          ? Math.max(0, Math.round(data.discountValue))
+          : 0;
+    const manualDiscount = Math.min(subtotal, rawManual);
 
-    if (data.paymentMethod === "cash" && data.amountPaid < totals.total) {
-      return { ok: false as const, error: "Uang diterima kurang dari total." };
+    // Voucher: server-side validation; kode dari klien hanya petunjuk.
+    let voucherRow: typeof vouchers.$inferSelect | null = null;
+    let voucherAmount = 0;
+    const code = data.voucherCode?.trim().toUpperCase() ?? "";
+    if (code) {
+      const found = await tx
+        .select()
+        .from(vouchers)
+        .where(and(eq(vouchers.storeId, store.id), eq(vouchers.code, code)))
+        .for("update")
+        .limit(1);
+      const v = found[0] ?? null;
+      const now = Date.now();
+      if (!v || !v.active) {
+        return { ok: false as const, error: `Voucher ${code} tidak ditemukan.` };
+      }
+      if (v.startsAt && v.startsAt.getTime() > now) {
+        return { ok: false as const, error: `Voucher ${code} belum berlaku.` };
+      }
+      if (v.endsAt && v.endsAt.getTime() < now) {
+        return { ok: false as const, error: `Voucher ${code} sudah kedaluwarsa.` };
+      }
+      if (v.usageLimit > 0 && v.usedCount >= v.usageLimit) {
+        return { ok: false as const, error: `Voucher ${code} sudah habis dipakai.` };
+      }
+      if (subtotal < v.minSubtotal) {
+        return {
+          ok: false as const,
+          error: `Voucher ${code} butuh belanja minimal ${v.minSubtotal / 100}.`,
+        };
+      }
+      const raw =
+        v.type === "percent"
+          ? Math.round((subtotal * Math.min(100, Math.max(0, v.value))) / 100)
+          : Math.max(0, Math.round(v.value));
+      voucherRow = v;
+      voucherAmount = Math.min(subtotal - manualDiscount, raw);
     }
-    const amountPaid = data.paymentMethod === "cash" ? data.amountPaid : totals.total;
-    const changeDue = amountPaid - totals.total;
-    const createdAt = new Date();
 
     let customerId: number | null = null;
+    let customerPoints = 0;
+    let customerName = "";
     if (data.customerId) {
       const found = await tx
-        .select({ id: customers.id })
+        .select({ id: customers.id, points: customers.points, name: customers.name })
         .from(customers)
         .where(
           and(
@@ -134,7 +188,67 @@ export async function checkoutAction(input: unknown): Promise<CheckoutResult> {
         )
         .limit(1);
       customerId = found[0]?.id ?? null;
+      customerPoints = found[0]?.points ?? 0;
+      customerName = found[0]?.name ?? "";
     }
+
+    // Tukar poin: butuh pelanggan, nilai tukar aktif, dan poin cukup.
+    let pointsRedeemed = 0;
+    let redeemAmount = 0;
+    if (data.pointsRedeem > 0) {
+      if (!customerId) {
+        return { ok: false as const, error: "Tukar poin butuh pelanggan terdaftar." };
+      }
+      if (store.pointsValue <= 0) {
+        return { ok: false as const, error: "Tukar poin tidak diaktifkan di pengaturan." };
+      }
+      if (data.pointsRedeem > customerPoints) {
+        return {
+          ok: false as const,
+          error: `Poin ${customerName || "pelanggan"} hanya ${customerPoints}.`,
+        };
+      }
+      pointsRedeemed = data.pointsRedeem;
+      redeemAmount = Math.min(
+        Math.max(0, subtotal - manualDiscount - voucherAmount),
+        pointsRedeemed * store.pointsValue,
+      );
+    }
+
+    const taxRate = store.taxRate;
+    const totals = computeTotals(
+      lines.map((l) => ({ unitPrice: l.product.price, qty: l.qty })),
+      {
+        discountType: data.discountType,
+        discountValue: data.discountValue,
+        fixedDiscount: voucherAmount + redeemAmount,
+        taxRate,
+      },
+    );
+
+    // Split payment: tunai boleh lebih untuk kembalian; non-tunai harus pas.
+    const payments = toPayments(data, data.paymentMethod, totals.total);
+    const cashTotal = payments
+      .filter((p) => p.method === "cash")
+      .reduce((sum, p) => sum + p.amount, 0);
+    const nonCashTotal = payments
+      .filter((p) => p.method !== "cash")
+      .reduce((sum, p) => sum + p.amount, 0);
+    if (nonCashTotal > totals.total) {
+      return { ok: false as const, error: "Total pembayaran melebihi tagihan." };
+    }
+    if (cashTotal < totals.total - nonCashTotal) {
+      return { ok: false as const, error: "Uang diterima kurang dari total." };
+    }
+    const changeDue = cashTotal - (totals.total - nonCashTotal);
+    const amountPaid = cashTotal + nonCashTotal;
+    const paymentMethod = payments.length > 1 ? "mixed" : payments[0].method;
+    const appliedPayments = payments.map((p) =>
+      p.method === "cash"
+        ? { method: p.method, amount: totals.total - nonCashTotal }
+        : p,
+    );
+    const createdAt = new Date();
 
     const pointsEarned =
       customerId && store.pointsPerAmount
@@ -172,15 +286,23 @@ export async function checkoutAction(input: unknown): Promise<CheckoutResult> {
         total: totals.total,
         costTotal: lines.reduce((s, l) => s + l.product.cost * l.qty, 0),
         pointsEarned,
+        pointsRedeemed,
+        redeemAmount,
+        voucherCode: voucherRow?.code ?? null,
+        voucherAmount,
         orderType: data.orderType,
         tableLabel: data.tableLabel || null,
-        paymentMethod: data.paymentMethod,
+        paymentMethod,
         amountPaid,
         changeDue,
         note: data.note || null,
         createdAt,
       })
       .returning({ id: orders.id, number: orders.number });
+
+    await tx.insert(orderPayments).values(
+      appliedPayments.map((p) => ({ orderId: order.id, method: p.method, amount: p.amount })),
+    );
 
     await tx.insert(orderItems).values(
       lines.map((l) => ({
@@ -213,11 +335,18 @@ export async function checkoutAction(input: unknown): Promise<CheckoutResult> {
       });
     }
 
+    if (voucherRow) {
+      await tx
+        .update(vouchers)
+        .set({ usedCount: sql`${vouchers.usedCount} + 1` })
+        .where(eq(vouchers.id, voucherRow.id));
+    }
+
     if (customerId) {
       await tx
         .update(customers)
         .set({
-          points: sql`${customers.points} + ${pointsEarned}`,
+          points: sql`${customers.points} + ${pointsEarned} - ${pointsRedeemed}`,
           totalSpent: sql`${customers.totalSpent} + ${totals.total}`,
         })
         .where(eq(customers.id, customerId));
@@ -237,6 +366,41 @@ export type RefundResult = { ok: true } | { ok: false; error: string };
 
 export async function refundOrderAction(
   orderId: number,
+  reason: string,
+): Promise<RefundResult> {
+  // Full refund: every item at its remaining quantity.
+  const items = await db
+    .select({ id: orderItems.id, remaining: sql<number>`${orderItems.qty} - ${orderItems.refundedQty}` })
+    .from(orderItems)
+    .where(eq(orderItems.orderId, orderId));
+  return refundOrderItems(
+    orderId,
+    items.map((item) => ({ itemId: item.id, qty: Number(item.remaining) })),
+    reason,
+  );
+}
+
+export async function refundOrderItemsAction(
+  orderId: number,
+  input: { itemId: number; qty: number }[],
+  reason: string,
+): Promise<RefundResult> {
+  if (!Array.isArray(input) || input.length === 0) {
+    return { ok: false, error: "Pilih minimal satu item untuk direfund." };
+  }
+  if (
+    input.some(
+      (row) => !Number.isInteger(row.itemId) || !Number.isInteger(row.qty) || row.qty < 1,
+    )
+  ) {
+    return { ok: false, error: "Item refund tidak valid." };
+  }
+  return refundOrderItems(orderId, input, reason);
+}
+
+async function refundOrderItems(
+  orderId: number,
+  requested: { itemId: number; qty: number }[],
   reason: string,
 ): Promise<RefundResult> {
   const auth = await assertAdmin();
@@ -259,19 +423,62 @@ export async function refundOrderAction(
     const order = found[0];
     if (!order) return { ok: false as const, error: "Pesanan tidak ditemukan." };
     if (order.status === "refunded") {
-      return { ok: false as const, error: "Pesanan ini sudah direfund." };
+      return { ok: false as const, error: "Pesanan ini sudah direfund penuh." };
+    }
+    if (order.subtotal <= 0 || order.total <= 0) {
+      return { ok: false as const, error: "Pesanan ini tidak bisa direfund." };
     }
 
     const items = await tx
       .select()
       .from(orderItems)
-      .where(eq(orderItems.orderId, orderId));
+      .where(eq(orderItems.orderId, orderId))
+      .for("update");
+    const byId = new Map(items.map((item) => [item.id, item]));
+
+    // Merge duplicate item ids, then validate against remaining quantities.
+    const qtyById = new Map<number, number>();
+    for (const row of requested) {
+      qtyById.set(row.itemId, (qtyById.get(row.itemId) ?? 0) + row.qty);
+    }
+    for (const [itemId, qty] of qtyById) {
+      const item = byId.get(itemId);
+      if (!item) return { ok: false as const, error: "Item tidak termasuk pesanan ini." };
+      const remaining = item.qty - item.refundedQty;
+      if (qty > remaining) {
+        return {
+          ok: false as const,
+          error: `${item.name}: maksimal refund ${remaining}.`,
+        };
+      }
+    }
+
+    // Refund follows the order's price structure: tax and discounts prorated
+    // by subtotal share, so a full-item refund equals the original charge.
+    let refundSubtotal = 0;
+    for (const [itemId, qty] of qtyById) {
+      const item = byId.get(itemId)!;
+      refundSubtotal += Math.round((item.lineTotal / item.qty) * qty);
+    }
+    const refundAmount = Math.round((order.total * refundSubtotal) / order.subtotal);
+    if (refundAmount <= 0) {
+      return { ok: false as const, error: "Nilai refund tidak valid." };
+    }
+
     const now = new Date();
-    for (const item of items) {
+    let fullyRefunded = true;
+    for (const [itemId, qty] of qtyById) {
+      const item = byId.get(itemId)!;
+      const refundedQty = item.refundedQty + qty;
+      if (refundedQty < item.qty) fullyRefunded = false;
+      await tx
+        .update(orderItems)
+        .set({ refundedQty })
+        .where(eq(orderItems.id, itemId));
       if (!item.productId) continue;
       await tx
         .update(products)
-        .set({ stock: sql`${products.stock} + ${item.qty}`, updatedAt: now })
+        .set({ stock: sql`${products.stock} + ${qty}`, updatedAt: now })
         .where(
           and(
             eq(products.id, item.productId),
@@ -281,7 +488,7 @@ export async function refundOrderAction(
       await tx.insert(stockMovements).values({
         storeId: store.id,
         productId: item.productId,
-        delta: item.qty,
+        delta: qty,
         reason: "refund",
         refType: "order",
         refId: order.id,
@@ -290,18 +497,22 @@ export async function refundOrderAction(
         createdAt: now,
       });
     }
+    // Items never touched by this request must also be exhausted for a full refund.
+    if (items.some((item) => item.refundedQty + (qtyById.get(item.id) ?? 0) < item.qty)) {
+      fullyRefunded = false;
+    }
 
-    await tx
-      .update(orders)
-      .set({ status: "refunded", refundedAt: now, refundedBy: user.id })
-      .where(eq(orders.id, orderId));
-
+    // Poin dan total belanja dikoreksi proporsional nilai refund.
+    const pointsBack = Math.round((order.pointsEarned * refundAmount) / order.total);
+    const pointsRedeemedBack = Math.round(
+      (order.pointsRedeemed * refundAmount) / order.total,
+    );
     if (order.customerId) {
       await tx
         .update(customers)
         .set({
-          points: sql`max(0, ${customers.points} - ${order.pointsEarned})`,
-          totalSpent: sql`max(0, ${customers.totalSpent} - ${order.total})`,
+          points: sql`greatest(0, ${customers.points} - ${pointsBack} + ${pointsRedeemedBack})`,
+          totalSpent: sql`greatest(0, ${customers.totalSpent} - ${refundAmount})`,
         })
         .where(
           and(
@@ -310,6 +521,27 @@ export async function refundOrderAction(
           ),
         );
     }
+    if (fullyRefunded && order.voucherCode) {
+      await tx
+        .update(vouchers)
+        .set({ usedCount: sql`greatest(0, ${vouchers.usedCount} - 1)` })
+        .where(
+          and(
+            eq(vouchers.storeId, store.id),
+            eq(vouchers.code, order.voucherCode),
+          ),
+        );
+    }
+
+    await tx
+      .update(orders)
+      .set({
+        status: fullyRefunded ? "refunded" : "partially_refunded",
+        refundedTotal: order.refundedTotal + refundAmount,
+        refundedAt: now,
+        refundedBy: user.id,
+      })
+      .where(eq(orders.id, orderId));
 
     return { ok: true as const };
   });

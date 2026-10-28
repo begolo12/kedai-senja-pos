@@ -3,6 +3,7 @@
 import { useTransition } from "react";
 import { LogOut, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { TeraMark } from "@/components/brand";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -91,8 +92,9 @@ export function MobileNav({ role }: { role: "admin" | "cashier" }) {
       </SheetTrigger>
       <SheetContent side="left" className="w-72 bg-sidebar p-0 text-sidebar-foreground">
         <SheetHeader className="border-b border-sidebar-border px-5 py-5">
-          <SheetTitle className="font-serif text-2xl text-sidebar-foreground">
-            Kedai Senja
+          <SheetTitle className="flex items-center gap-2 font-serif text-2xl text-sidebar-foreground">
+            <TeraMark className="size-7 rounded-[4px] object-cover" />
+            Tera POS
           </SheetTitle>
           <p className="text-[10px] tracking-[0.22em] text-sidebar-foreground/50 uppercase">
             Point of sale

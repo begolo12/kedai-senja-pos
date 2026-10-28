@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PageHeader, SectionLabel } from "@/components/shared/page-header";
 import { RevenueBars, type RevenuePoint } from "@/components/charts/revenue-bars";
+import { HourlyBars, type HourlyPoint } from "@/components/charts/hourly-bars";
 
 export const metadata: Metadata = { title: "Laporan" };
 
@@ -39,27 +40,27 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
     discount: number;
     orders: number;
   }>(sql`
-    select coalesce(sum(total), 0) as revenue,
+    select coalesce(sum(total - refunded_total), 0) as revenue,
            coalesce(sum(tax_amount), 0) as tax,
            coalesce(sum(cost_total), 0) as cost,
            coalesce(sum(discount_amount), 0) as discount,
            count(*) as orders
     from orders
-    where store_id = ${store.id} and status = 'completed' and created_at >= ${new Date(start)} and created_at < ${new Date(end)}
+    where store_id = ${store.id} and status <> 'refunded' and created_at >= ${new Date(start)} and created_at < ${new Date(end)}
   `))[0];
 
   const refunds = (await rows<{ count: number; value: number }>(sql`
-    select count(*) as count, coalesce(sum(total), 0) as value
+    select count(*) as count, coalesce(sum(refunded_total), 0) as value
     from orders
-    where store_id = ${store.id} and status = 'refunded' and created_at >= ${new Date(start)} and created_at < ${new Date(end)}
+    where store_id = ${store.id} and refunded_total > 0 and created_at >= ${new Date(start)} and created_at < ${new Date(end)}
   `))[0];
 
   const rawSeries = await rows<RevenuePoint>(sql`
     select to_char(created_at at time zone 'Asia/Jakarta', 'YYYY-MM-DD') as day,
-           coalesce(sum(total), 0) as revenue,
+           coalesce(sum(total - refunded_total), 0) as revenue,
            count(*) as orders
     from orders
-    where store_id = ${store.id} and status = 'completed' and created_at >= ${new Date(start)} and created_at < ${new Date(end)}
+    where store_id = ${store.id} and status <> 'refunded' and created_at >= ${new Date(start)} and created_at < ${new Date(end)}
     group by 1
     order by 1
   `);
@@ -79,48 +80,72 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
   }
 
   const payments = await rows<{ method: string; revenue: number; orders: number }>(sql`
-    select payment_method as method, coalesce(sum(total), 0) as revenue, count(*) as orders
-    from orders
-    where store_id = ${store.id} and status = 'completed' and created_at >= ${new Date(start)} and created_at < ${new Date(end)}
-    group by payment_method
+    select op.method as method,
+           coalesce(sum(op.amount - case when o.refunded_total > 0 and o.total > 0
+                 then round(o.refunded_total * op.amount / o.total) else 0 end), 0) as revenue,
+           count(distinct o.id) as orders
+    from order_payments op
+    join orders o on o.id = op.order_id
+    where o.store_id = ${store.id} and o.status <> 'refunded' and o.created_at >= ${new Date(start)} and o.created_at < ${new Date(end)}
+    group by op.method
     order by revenue desc
   `);
 
   const topProducts = await rows<{ name: string; qty: number; revenue: number; margin: number }>(sql`
     select oi.name as name,
-           sum(oi.qty) as qty,
-           sum(oi.line_total) as revenue,
-           sum((oi.unit_price - oi.cost) * oi.qty) as margin
+           sum(oi.qty - oi.refunded_qty) as qty,
+           sum((oi.qty - oi.refunded_qty) * oi.unit_price) as revenue,
+           sum((oi.qty - oi.refunded_qty) * (oi.unit_price - oi.cost)) as margin
     from order_items oi
     join orders o on o.id = oi.order_id
-    where o.store_id = ${store.id} and o.status = 'completed' and o.created_at >= ${new Date(start)} and o.created_at < ${new Date(end)}
+    where o.store_id = ${store.id} and o.status <> 'refunded' and o.created_at >= ${new Date(start)} and o.created_at < ${new Date(end)}
     group by oi.name
-    order by sum(oi.qty) desc
+    order by sum(oi.qty - oi.refunded_qty) desc
     limit 8
   `);
 
   const byStaff = await rows<{ name: string; orders: number; revenue: number }>(sql`
-    select u.name as name, count(*) as orders, coalesce(sum(o.total), 0) as revenue
+    select u.name as name, count(*) as orders, coalesce(sum(o.total - o.refunded_total), 0) as revenue
     from orders o
     join users u on u.id = o.user_id
-    where o.store_id = ${store.id} and o.status = 'completed' and o.created_at >= ${new Date(start)} and o.created_at < ${new Date(end)}
+    where o.store_id = ${store.id} and o.status <> 'refunded' and o.created_at >= ${new Date(start)} and o.created_at < ${new Date(end)}
     group by u.name
     order by revenue desc
   `);
 
   const byCategory = await rows<{ name: string; revenue: number; qty: number }>(sql`
     select coalesce(c.name, 'Tanpa kategori') as name,
-           coalesce(sum(oi.line_total), 0) as revenue,
-           coalesce(sum(oi.qty), 0) as qty
+           coalesce(sum((oi.qty - oi.refunded_qty) * oi.unit_price), 0) as revenue,
+           coalesce(sum(oi.qty - oi.refunded_qty), 0) as qty
     from order_items oi
     join orders o on o.id = oi.order_id
     left join products p on p.id = oi.product_id
     left join categories c on c.id = p.category_id
-    where o.store_id = ${store.id} and o.status = 'completed' and o.created_at >= ${new Date(start)} and o.created_at < ${new Date(end)}
+    where o.store_id = ${store.id} and o.status <> 'refunded' and o.created_at >= ${new Date(start)} and o.created_at < ${new Date(end)}
     group by c.name
     order by revenue desc
   `);
 
+  const rawHourly = await rows<{ hour: number; revenue: number; orders: number }>(sql`
+    select extract(hour from created_at at time zone 'Asia/Jakarta') as hour,
+           coalesce(sum(total - refunded_total), 0) as revenue,
+           count(*) as orders
+    from orders
+    where store_id = ${store.id} and status <> 'refunded' and created_at >= ${new Date(start)} and created_at < ${new Date(end)}
+    group by 1
+    order by 1
+  `);
+  const hourlyMap = new Map(
+    rawHourly.map((point) => [Number(point.hour), { hour: Number(point.hour), revenue: Number(point.revenue), orders: Number(point.orders) }]),
+  );
+  const hourly: HourlyPoint[] = Array.from({ length: 24 }, (_, hour) =>
+    hourlyMap.get(hour) ?? { hour, revenue: 0, orders: 0 },
+  );
+  const busiest = hourly.reduce((best, point) => (point.revenue > best.revenue ? point : best), {
+    hour: 0,
+    revenue: 0,
+    orders: 0,
+  });
   const revenue = Number(summary?.revenue ?? 0);
   const tax = Number(summary?.tax ?? 0);
   const cost = Number(summary?.cost ?? 0);
@@ -136,7 +161,7 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
       <PageHeader
         eyebrow={`${store.name} · ${range.from} → ${range.to}`}
         title="Laporan"
-        description="Hanya pesanan berstatus selesai yang dihitung sebagai pendapatan. Refund terpisah."
+        description="Pendapatan dihitung bersih setelah refund; refund parsial mengurangi pesanan asalnya."
         actions={
           <Button nativeButton={false} variant="outline" size="sm" render={<a href={exportUrl} />}>
             Unduh CSV
@@ -181,7 +206,7 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
         <Kpi label="Pendapatan" value={formatMoney(revenue, settings.currency)} note={`${orders} pesanan selesai`} accent />
         <Kpi label="Laba kotor" value={formatMoney(profit, settings.currency)} note={`Margin ${revenue > 0 ? Math.round((profit / revenue) * 100) : 0}%`} />
         <Kpi label="Rata-rata / pesanan" value={formatMoney(avg, settings.currency)} note={`Diskon ${formatMoney(Number(summary?.discount ?? 0), settings.currency)}`} />
-        <Kpi label="Refund" value={formatMoney(Number(refunds?.value ?? 0), settings.currency)} note={`${refunds?.count ?? 0} pesanan dikembalikan`} />
+        <Kpi label="Refund" value={formatMoney(Number(refunds?.value ?? 0), settings.currency)} note={`${refunds?.count ?? 0} pesanan terdampak`} />
       </section>
 
       <section className="border border-border bg-card p-5">
@@ -197,6 +222,20 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
         <RevenueBars data={series} height={260} />
       </section>
 
+      <section className="border border-border bg-card p-5">
+        <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
+          <div>
+            <SectionLabel>Jam sibuk</SectionLabel>
+            <h2 className="font-serif text-2xl leading-none">Pendapatan per jam</h2>
+          </div>
+          <p className="font-mono text-xs text-muted-foreground">
+            {busiest.revenue > 0
+              ? `Tersibuk ${HOUR_LABEL.format(new Date(2026, 0, 1, busiest.hour))} WIB · ${busiest.orders} pesanan`
+              : "Belum ada transaksi"}
+          </p>
+        </div>
+        <HourlyBars data={hourly} height={200} />
+      </section>
       <div className="grid gap-6 lg:grid-cols-2">
         <section className="border border-border bg-card">
           <div className="border-b border-border px-5 py-4">
@@ -330,3 +369,8 @@ function Kpi({ label, value, note, accent }: { label: string; value: string; not
     </div>
   );
 }
+
+const HOUR_LABEL = new Intl.DateTimeFormat("id-ID", {
+  hour: "numeric",
+  timeZone: "Asia/Jakarta",
+});

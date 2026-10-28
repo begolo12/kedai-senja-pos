@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { ArrowUpRight, AudioLines } from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
+import { TeraMark } from "@/components/brand";
 import { requireStore } from "@/lib/auth";
 import { getOpenShift } from "@/lib/shifts";
 import { getSettings } from "@/lib/settings";
@@ -18,8 +19,8 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
         <div className="border-b border-sidebar-border px-5 py-6">
           <Link href="/" className="block">
             <span className="flex items-center gap-2 text-[10px] tracking-[0.22em] text-sidebar-foreground/70 uppercase">
-              <AudioLines className="size-3.5" strokeWidth={1.8} />
-              Point of sale
+              <TeraMark className="size-6 rounded-[3px] object-cover" />
+              Tera POS
             </span>
             <span className="mt-2 block font-serif text-[26px] leading-none">
               {settings.storeName}

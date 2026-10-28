@@ -16,6 +16,7 @@ export const metadata: Metadata = { title: "Pesanan" };
 const STATUS = [
   { value: "all", label: "Semua" },
   { value: "completed", label: "Selesai" },
+  { value: "partially_refunded", label: "Refund parsial" },
   { value: "refunded", label: "Refund" },
 ] as const;
 
@@ -38,7 +39,9 @@ export default async function OrdersPage({ searchParams }: PageProps<"/orders">)
     eq(orders.storeId, store.id),
     gte(orders.createdAt, from),
     lt(orders.createdAt, to),
-    status === "completed" || status === "refunded" ? eq(orders.status, status) : undefined,
+    STATUS.some((s) => s.value === status && status !== "all")
+      ? eq(orders.status, status as "completed" | "partially_refunded" | "refunded")
+      : undefined,
     q
       ? or(like(orders.number, `%${q}%`), like(customers.name, `%${q}%`))
       : undefined,
@@ -65,8 +68,8 @@ export default async function OrdersPage({ searchParams }: PageProps<"/orders">)
   const totals = (await db
     .select({
       count: sql<number>`count(*)`,
-      revenue: sql<number>`coalesce(sum(case when ${orders.status} = 'completed' then ${orders.total} else 0 end), 0)`,
-      refunds: sql<number>`coalesce(sum(case when ${orders.status} = 'refunded' then ${orders.total} else 0 end), 0)`,
+      revenue: sql<number>`coalesce(sum(case when ${orders.status} <> 'refunded' then ${orders.total} - ${orders.refundedTotal} else 0 end), 0)`,
+      refunds: sql<number>`coalesce(sum(${orders.refundedTotal}), 0)`,
     })
     .from(orders)
     .leftJoin(customers, eq(orders.customerId, customers.id))
@@ -164,6 +167,8 @@ export default async function OrdersPage({ searchParams }: PageProps<"/orders">)
                 <td className="px-4 py-2.5 text-right">
                   {order.status === "refunded" ? (
                     <span className="stamp border-destructive/40 text-destructive">Refund</span>
+                  ) : order.status === "partially_refunded" ? (
+                    <span className="stamp border-signal/50 text-signal">Parsial</span>
                   ) : (
                     <span className="stamp border-border text-muted-foreground">Selesai</span>
                   )}

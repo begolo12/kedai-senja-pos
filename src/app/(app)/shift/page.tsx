@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { orders, shifts, users } from "@/lib/db/schema";
+import { shifts, users } from "@/lib/db/schema";
 import { requireStore } from "@/lib/auth";
 import { getSettings } from "@/lib/settings";
-import { getOpenShift } from "@/lib/shifts";
+import { getOpenShift, getShiftSummary } from "@/lib/shifts";
 import { formatDateTime, formatMoney } from "@/lib/money";
 import { Button } from "@/components/ui/button";
 import { PageHeader, SectionLabel } from "@/components/shared/page-header";
@@ -18,25 +18,12 @@ export default async function ShiftPage() {
   const settings = await getSettings(store.id);
   const current = await getOpenShift(user.id, store.id);
 
-  const sales = current
-    ? (
-        await db
-        .select({
-          total: sql<number>`coalesce(sum(${orders.total}), 0)`,
-          count: sql<number>`count(*)`,
-          cash: sql<number>`coalesce(sum(case when ${orders.paymentMethod} = 'cash' then ${orders.total} else 0 end), 0)`,
-        })
-        .from(orders)
-        .where(
-          and(
-            eq(orders.storeId, store.id),
-            eq(orders.shiftId, current.id),
-            eq(orders.status, "completed"),
-          ),
-        )
-      )[0]!
-    : { total: 0, count: 0, cash: 0 };
-  const expectedCash = current ? current.openingFloat + Number(sales.cash) : 0;
+  const summary = current
+    ? await getShiftSummary(current.id, store.id)
+    : { orderCount: 0, grossSales: 0, netSales: 0, cashIn: 0, refundTotal: 0, cashRefundOut: 0 };
+  const expectedCash = current
+    ? current.openingFloat + summary.cashIn - summary.cashRefundOut
+    : 0;
 
   const history = await db
     .select({
@@ -77,10 +64,19 @@ export default async function ShiftPage() {
             </div>
             <dl className="grid grid-cols-2 gap-px bg-border sm:grid-cols-4">
               <Stat label="Kas awal" value={formatMoney(current.openingFloat, settings.currency)} />
-              <Stat label="Penjualan" value={formatMoney(Number(sales.total), settings.currency)} />
-              <Stat label="Tunai masuk" value={formatMoney(Number(sales.cash), settings.currency)} />
-              <Stat label="Transaksi" value={String(sales.count)} />
+              <Stat label="Penjualan bersih" value={formatMoney(summary.netSales, settings.currency)} />
+              <Stat label="Tunai masuk" value={formatMoney(summary.cashIn, settings.currency)} />
+              <Stat label="Transaksi" value={String(summary.orderCount)} />
             </dl>
+            {summary.cashRefundOut > 0 ? (
+              <p className="border-t border-border px-5 py-2 text-[11px] text-muted-foreground">
+                Sudah dikurangi refund tunai sebesar{" "}
+                <span className="font-mono text-destructive">
+                  −{formatMoney(summary.cashRefundOut, settings.currency)}
+                </span>{" "}
+                dari {formatMoney(summary.refundTotal, settings.currency)} refund.
+              </p>
+            ) : null}
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-5 py-4">
               <div>
                 <p className="text-[10px] tracking-[0.14em] text-muted-foreground uppercase">

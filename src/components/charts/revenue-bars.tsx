@@ -46,10 +46,10 @@ export function RevenueBars({
           <YAxis
             tickLine={false}
             axisLine={false}
-            width={52}
-            tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
-            tickFormatter={(value: number) => formatMoney(value, "IDR", { compact: true })}
-          />
+            width={58}
+          tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
+          tickFormatter={(value: number) => formatMoney(value, "IDR", { compact: true })}
+        />
           <Tooltip
             cursor={{ fill: "var(--muted)", opacity: 0.6 }}
             content={({ active, payload, label }) => {

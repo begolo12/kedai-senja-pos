@@ -5,10 +5,12 @@ import {
   categories,
   customers,
   orderItems,
+  orderPayments,
   orders,
   products,
   shifts,
   stockMovements,
+  vouchers,
 } from "@/lib/db/schema";
 import {
   corsHeaders,
@@ -49,12 +51,27 @@ const orderSchema = z.object({
   paymentMethod: z.enum(["cash", "card", "qris"]),
   amountPaid: z.number().int().min(0),
   changeDue: z.number().int().min(0),
+  customerId: z.number().int().positive().nullable().optional(),
+  pointsRedeem: z.number().int().min(0).max(100_000).default(0),
+  voucherCode: z
+    .string()
+    .trim()
+    .max(32)
+    .regex(/^[A-Za-z0-9-]*$/, "Kode voucher tidak valid.")
+    .optional(),
   createdAt: z.string().datetime(),
   note: z.string().trim().max(160).optional(),
 });
 
+const newCustomerSchema = z.object({
+  clientId: z.string().uuid(),
+  name: z.string().trim().min(2).max(80),
+  phone: z.string().trim().max(20).optional(),
+});
+
 const payloadSchema = z.object({
   orders: z.array(orderSchema).max(60).default([]),
+  newCustomers: z.array(newCustomerSchema).max(60).default([]),
 });
 
 type OrderInput = z.infer<typeof orderSchema>;
@@ -67,7 +84,7 @@ type SyncResult = {
 };
 
 async function pullSnapshot(storeId: number) {
-  const [productRows, categoryRows, customerRows, settingsRow] = await Promise.all([
+  const [productRows, categoryRows, customerRows, settingsRow, voucherRows] = await Promise.all([
     db
       .select({
         id: products.id,
@@ -95,6 +112,21 @@ async function pullSnapshot(storeId: number) {
       .where(eq(customers.storeId, storeId))
       .orderBy(customers.name),
     getSettings(storeId),
+    db
+      .select({
+        code: vouchers.code,
+        label: vouchers.label,
+        type: vouchers.type,
+        value: vouchers.value,
+        minSubtotal: vouchers.minSubtotal,
+        startsAt: vouchers.startsAt,
+        endsAt: vouchers.endsAt,
+        usageLimit: vouchers.usageLimit,
+        usedCount: vouchers.usedCount,
+      })
+      .from(vouchers)
+      .where(and(eq(vouchers.storeId, storeId), eq(vouchers.active, true)))
+      .orderBy(vouchers.code),
   ]);
 
   return {
@@ -108,12 +140,49 @@ async function pullSnapshot(storeId: number) {
       qrisPayload: settingsRow.qrisPayload,
       receiptFooter: settingsRow.receiptFooter,
       pointsPerAmount: settingsRow.pointsPerAmount,
+      pointsValue: settingsRow.pointsValue,
     },
     categories: categoryRows,
     products: productRows,
     customers: customerRows,
+    vouchers: voucherRows,
     serverTime: new Date().toISOString(),
   };
+}
+
+type CustomerSyncResult = { clientId: string; status: "created" | "exists"; id?: number };
+
+/** Pelanggan yang dibuat offline diunggah dua arah; telepon unik per toko. */
+async function pushCustomers(
+  storeId: number,
+  entries: { clientId: string; name: string; phone?: string }[],
+): Promise<CustomerSyncResult[]> {
+  const results: CustomerSyncResult[] = [];
+  for (const entry of entries) {
+    try {
+      if (entry.phone) {
+        const clash = await db
+          .select({ id: customers.id })
+          .from(customers)
+          .where(
+            and(eq(customers.storeId, storeId), eq(customers.phone, entry.phone)),
+          )
+          .limit(1);
+        if (clash[0]) {
+          results.push({ clientId: entry.clientId, status: "exists", id: clash[0].id });
+          continue;
+        }
+      }
+      const [row] = await db
+        .insert(customers)
+        .values({ storeId, name: entry.name, phone: entry.phone ?? null })
+        .returning({ id: customers.id });
+      results.push({ clientId: entry.clientId, status: "created", id: row.id });
+    } catch {
+      results.push({ clientId: entry.clientId, status: "exists" });
+    }
+  }
+  return results;
 }
 
 async function pushOrder(
@@ -138,11 +207,71 @@ async function pushOrder(
     };
   }
 
+  const settings = await getSettings(storeId);
+
+  // Voucher dan poin divalidasi ulang dari DB — angka klien hanya petunjuk.
+  const code = input.voucherCode?.trim().toUpperCase() ?? "";
+  let voucherRow: typeof vouchers.$inferSelect | null = null;
+  let voucherAmount = 0;
+  if (code) {
+    const found = await db
+      .select()
+      .from(vouchers)
+      .where(and(eq(vouchers.storeId, storeId), eq(vouchers.code, code)))
+      .limit(1);
+    const v = found[0] ?? null;
+    const now = Date.now();
+    if (
+      !v ||
+      !v.active ||
+      (v.startsAt && v.startsAt.getTime() > now) ||
+      (v.endsAt && v.endsAt.getTime() < now) ||
+      (v.usageLimit > 0 && v.usedCount >= v.usageLimit) ||
+      input.subtotal < v.minSubtotal
+    ) {
+      return { clientId: input.clientId, status: "rejected", error: `Voucher ${code} tidak valid.` };
+    }
+    voucherRow = v;
+    voucherAmount = Math.min(
+      input.subtotal,
+      v.type === "percent"
+        ? Math.round((input.subtotal * Math.min(100, Math.max(0, v.value))) / 100)
+        : Math.max(0, Math.round(v.value)),
+    );
+  }
+
+  const customerId: number | null = input.customerId ?? null;
+  let customerPoints = 0;
+  if (customerId) {
+    const found = await db
+      .select({ id: customers.id, points: customers.points })
+      .from(customers)
+      .where(and(eq(customers.id, customerId), eq(customers.storeId, storeId)))
+      .limit(1);
+    if (!found[0]) {
+      return { clientId: input.clientId, status: "rejected", error: "Pelanggan tidak ditemukan." };
+    }
+    customerPoints = found[0].points;
+  }
+  let pointsRedeemed = 0;
+  let redeemAmount = 0;
+  if (input.pointsRedeem > 0) {
+    if (!customerId || settings.pointsValue <= 0 || input.pointsRedeem > customerPoints) {
+      return { clientId: input.clientId, status: "rejected", error: "Tukar poin tidak valid." };
+    }
+    pointsRedeemed = input.pointsRedeem;
+    redeemAmount = Math.min(
+      Math.max(0, input.subtotal - voucherAmount),
+      pointsRedeemed * settings.pointsValue,
+    );
+  }
+
   const expected = computeTotals(
     input.items.map((item) => ({ unitPrice: item.unitPrice, qty: item.qty })),
     {
       discountType: input.discountType,
       discountValue: input.discountValue,
+      fixedDiscount: voucherAmount + redeemAmount,
       taxRate: input.taxRate,
     },
   );
@@ -167,6 +296,10 @@ async function pushOrder(
   }
 
   const created = await db.transaction(async (tx) => {
+    const pointsEarned =
+      customerId && settings.pointsPerAmount
+        ? Math.floor(input.total / settings.pointsPerAmount)
+        : 0;
     const again = await tx
       .select({ id: orders.id, number: orders.number })
       .from(orders)
@@ -232,6 +365,7 @@ async function pushOrder(
         storeId,
         shiftId: shiftRows[0]?.id ?? null,
         userId,
+        customerId,
         subtotal: input.subtotal,
         discountType: input.discountType,
         discountValue: input.discountValue,
@@ -239,7 +373,11 @@ async function pushOrder(
         taxAmount: input.taxAmount,
         total: input.total,
         costTotal: input.costTotal,
-        pointsEarned: 0,
+        pointsEarned,
+        pointsRedeemed,
+        redeemAmount,
+        voucherCode: voucherRow?.code ?? null,
+        voucherAmount,
         orderType: input.orderType,
         tableLabel: input.tableLabel || null,
         paymentMethod: input.paymentMethod,
@@ -249,6 +387,13 @@ async function pushOrder(
         createdAt,
       })
       .returning({ id: orders.id, number: orders.number });
+
+    // Baris pembayaran menyimpan nilai bersih: sama dengan total.
+    await tx.insert(orderPayments).values({
+      orderId: order.id,
+      method: input.paymentMethod,
+      amount: input.total,
+    });
 
     await tx.insert(orderItems).values(
       input.items.map((item) => ({
@@ -277,6 +422,22 @@ async function pushOrder(
         note: "Sinkron offline",
         createdAt,
       });
+    }
+
+    if (voucherRow) {
+      await tx
+        .update(vouchers)
+        .set({ usedCount: sql`${vouchers.usedCount} + 1` })
+        .where(eq(vouchers.id, voucherRow.id));
+    }
+    if (customerId) {
+      await tx
+        .update(customers)
+        .set({
+          points: sql`${customers.points} + ${pointsEarned} - ${pointsRedeemed}`,
+          totalSpent: sql`${customers.totalSpent} + ${input.total}`,
+        })
+        .where(eq(customers.id, customerId));
     }
 
     return { status: "created" as const, id: order.id, number: order.number };
@@ -313,6 +474,11 @@ export async function POST(request: Request) {
     return json(request, { error: "Payload sinkron tidak valid." }, 400);
   }
 
+  const customerResults = await pushCustomers(
+    context.store.id,
+    parsed.data.newCustomers,
+  );
+
   const results: SyncResult[] = [];
   for (const order of parsed.data.orders) {
     try {
@@ -330,6 +496,7 @@ export async function POST(request: Request) {
     user: mobileUser(context.user),
     store: mobileStore(context.store),
     results,
+    customerResults,
     ...(await pullSnapshot(context.store.id)),
   });
 }

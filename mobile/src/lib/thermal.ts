@@ -63,7 +63,7 @@ export async function printOrder(order: PendingOrder, settings: Settings) {
   if (Capacitor.isNativePlatform()) {
     await ThermalPrint.print({
       html,
-      jobName: order.serverNumber ?? "Struk Kasir Senja",
+      jobName: order.serverNumber ?? "Struk Tera POS",
       widthMm: settings.receiptWidth,
     });
     return;

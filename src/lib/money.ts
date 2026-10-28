@@ -71,16 +71,19 @@ export type CartTotals = {
 /**
  * Server and client share this so the ticket always matches the charge.
  * Discount is capped at the subtotal; tax applies after discount.
+ * `fixedDiscount` stacks on top of the manual discount (voucher, poin).
  */
 export function computeTotals(
   lines: { unitPrice: number; qty: number }[],
   {
     discountType = null,
     discountValue = 0,
+    fixedDiscount = 0,
     taxRate = 0,
   }: {
     discountType?: DiscountType | null;
     discountValue?: number;
+    fixedDiscount?: number;
     taxRate?: number;
   } = {},
 ): CartTotals {
@@ -95,7 +98,7 @@ export function computeTotals(
       : discountType === "amount"
         ? Math.max(0, Math.round(discountValue))
         : 0;
-  const discountAmount = Math.min(subtotal, rawDiscount);
+  const discountAmount = Math.min(subtotal, rawDiscount + Math.max(0, Math.round(fixedDiscount)));
   const taxable = subtotal - discountAmount;
   const taxAmount = Math.round((taxable * clamp(taxRate, 0, 10000)) / 10000);
 
@@ -111,8 +114,8 @@ function clamp(n: number, min: number, max: number) {
   return Math.min(max, Math.max(min, n));
 }
 
-/** Fixed daily sequence: KDj-YYMMDD-001. Caller passes today's count. */
-export function orderNumber(date: Date, seq: number, prefix = "KDJ") {
+/** Fixed daily sequence: TRA-YYMMDD-001. Caller passes today's count. */
+export function orderNumber(date: Date, seq: number, prefix = "TRA") {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Jakarta",
     year: "2-digit",

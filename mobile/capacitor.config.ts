@@ -1,8 +1,8 @@
 import type { CapacitorConfig } from "@capacitor/cli";
 
 const config: CapacitorConfig = {
-  appId: "id.kedaisenja.pos",
-  appName: "Kasir Senja",
+  appId: "id.terapos.pos",
+  appName: "Tera POS",
   webDir: "dist",
   android: {
     allowMixedContent: false,

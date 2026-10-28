@@ -20,8 +20,9 @@ const instrumentSerif = Instrument_Serif({
 });
 
 export const metadata: Metadata = {
-  title: { default: "Kedai Senja · Kasir", template: "%s · Kedai Senja" },
-  description: "Point of sale untuk kedai: kasir, stok, pesanan, laporan.",
+  title: { default: "Tera POS · Kasir & Laporan", template: "%s · Tera POS" },
+  description:
+    "Kasir, stok, pesanan, shift, dan laporan untuk warung, kafe, dan toko Indonesia. Semua tertera.",
 };
 
 export const viewport: Viewport = {

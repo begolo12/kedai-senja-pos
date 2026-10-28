@@ -4,11 +4,20 @@ import {
   ReceiptText,
   RefreshCw,
   Settings as SettingsIcon,
-  ShoppingBag,
   Wifi,
   WifiOff,
 } from "lucide-react";
-import { getSetting, db, saveSnapshot, clearLocalData, prepareStore } from "./lib/db";
+import {
+  getSetting,
+  db,
+  saveSnapshot,
+  clearLocalData,
+  prepareStore,
+  listCustomers,
+  createLocalCustomer,
+  pendingLocalCustomers,
+  reconcileLocalCustomers,
+} from "./lib/db";
 import { ApiError, sync, type LoginResult } from "./lib/api";
 import { computeTotals, formatMoney, formatTime } from "./lib/money";
 import { printOrder } from "./lib/thermal";
@@ -20,31 +29,48 @@ import type {
   PendingOrder,
   Product,
   Settings,
+  Voucher,
 } from "./lib/types";
 import { LoginScreen } from "./screens/LoginScreen";
 import { StorePicker } from "./screens/StorePicker";
-import { PosScreen, type CartLine } from "./screens/PosScreen";
+import { PosScreen, type CartLine, type CheckoutInput, type ParkedTicket } from "./screens/PosScreen";
 
 type LocalData = {
   settings: Settings;
   products: Product[];
   categories: Category[];
   customers: Customer[];
+  vouchers: Voucher[];
 };
+
+const PARKED_KEY = "pos.parked.v1";
+
+function loadParked(): ParkedTicket[] {
+  try {
+    const raw = localStorage.getItem(PARKED_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as ParkedTicket[];
+    return Array.isArray(parsed) ? parsed.filter((entry) => Array.isArray(entry.cart)) : [];
+  } catch {
+    return [];
+  }
+}
 
 async function loadLocal(): Promise<LocalData | null> {
   const settings = await getSetting();
   if (!settings) return null;
-  const [products, categories, customers] = await Promise.all([
+  const [products, categories, customers, vouchers] = await Promise.all([
     db.products.orderBy("name").toArray(),
     db.categories.toArray(),
-    db.customers.toArray(),
+    listCustomers(),
+    db.vouchers.toArray(),
   ]);
   return {
     settings,
     products,
     categories: categories.sort((a, b) => a.sortOrder - b.sortOrder),
     customers,
+    vouchers,
   };
 }
 
@@ -60,6 +86,9 @@ export default function App() {
   const [syncError, setSyncError] = useState<string | null>(null);
   const [expired, setExpired] = useState(false);
   const [cart, setCart] = useState<CartLine[]>([]);
+  const [parked, setParked] = useState<ParkedTicket[]>([]);
+  const [restoreKey, setRestoreKey] = useState(0);
+  const [restore, setRestore] = useState<ParkedTicket | null>(null);
   const [receipt, setReceipt] = useState<PendingOrder | null>(null);
   const [view, setView] = useState<"pos" | "history" | "settings" | null>("pos");
   const [orders, setOrders] = useState<PendingOrder[]>([]);
@@ -86,7 +115,16 @@ export default function App() {
       setSyncError(null);
       try {
         const pendingOrders = await db.orders.where("status").equals("pending").toArray();
-        const response = await sync(current.token, pendingOrders);
+        const locals = await pendingLocalCustomers();
+        const response = await sync(
+          current.token,
+          pendingOrders,
+          locals.map((entry) => ({
+            clientId: entry.clientId,
+            name: entry.name,
+            phone: entry.phone ?? undefined,
+          })),
+        );
         for (const result of response.results) {
           const existing = await db.orders.get(result.clientId);
           if (!existing) continue;
@@ -101,6 +139,9 @@ export default function App() {
           setReceipt((current) =>
             current && current.clientId === result.clientId ? updated : current,
           );
+        }
+        if (response.customerResults?.length) {
+          await reconcileLocalCustomers(response.customerResults);
         }
         await saveSnapshot({ ...response, storeId: response.store.id });
         const fresh = await loadLocal();
@@ -131,6 +172,7 @@ export default function App() {
 
   useEffect(() => {
     async function boot() {
+      setParked(loadParked());
       const stored = await readSession();
       if (stored) {
         try {
@@ -152,6 +194,11 @@ export default function App() {
     // Mount only: boot restores the persisted session exactly once.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (parked.length === 0) localStorage.removeItem(PARKED_KEY);
+    else localStorage.setItem(PARKED_KEY, JSON.stringify(parked));
+  }, [parked]);
 
   useEffect(() => {
     const goOnline = () => {
@@ -219,16 +266,43 @@ export default function App() {
     setCart((prev) => prev.filter((line) => line.id !== lineId));
   }
 
-  async function checkout(
-    method: "cash" | "qris" | "card",
-    amountPaid: number,
-    orderType: "dine_in" | "takeaway",
-    tableLabel: string,
-  ) {
+  async function handleCreateCustomer(name: string, phone: string): Promise<number | null> {
+    if (name.trim().length < 2) return null;
+    // Id negatif sementara; sinkron menggantinya dengan id server.
+    const entry = await createLocalCustomer(name, phone);
+    const fresh = await loadLocal();
+    if (fresh) setData(fresh);
+    void syncNow();
+    return entry.id;
+  }
+
+  async function checkout(input: CheckoutInput) {
     if (!data) return;
+    const subtotal = cart.reduce(
+      (sum, line) => sum + line.product.price * line.qty,
+      0,
+    );
+    const voucher = input.voucherCode
+      ? (data.vouchers.find((entry) => entry.code === input.voucherCode) ?? null)
+      : null;
+    const voucherAmount = voucher
+      ? Math.min(
+          subtotal,
+          voucher.type === "percent"
+            ? Math.round((subtotal * Math.min(100, Math.max(0, voucher.value))) / 100)
+            : Math.max(0, voucher.value),
+        )
+      : 0;
+    const redeemAmount = Math.min(
+      Math.max(0, subtotal - voucherAmount),
+      input.pointsRedeem * (data.settings.pointsValue ?? 0),
+    );
     const totals = computeTotals(
       cart.map((line) => ({ unitPrice: line.product.price, qty: line.qty })),
-      { taxRate: data.settings.taxRate },
+      {
+        taxRate: data.settings.taxRate,
+        fixedDiscount: voucherAmount + redeemAmount,
+      },
     );
     const order: PendingOrder = {
       clientId: crypto.randomUUID(),
@@ -246,11 +320,14 @@ export default function App() {
       taxRate: data.settings.taxRate,
       ...totals,
       costTotal: cart.reduce((sum, line) => sum + line.product.cost * line.qty, 0),
-      orderType,
-      tableLabel: tableLabel || undefined,
-      paymentMethod: method,
-      amountPaid: method === "cash" ? amountPaid : totals.total,
-      changeDue: (method === "cash" ? amountPaid : totals.total) - totals.total,
+      orderType: input.orderType,
+      tableLabel: input.tableLabel || undefined,
+      paymentMethod: input.method,
+      amountPaid: input.method === "cash" ? input.amountPaid : totals.total,
+      changeDue: (input.method === "cash" ? input.amountPaid : totals.total) - totals.total,
+      customerId: input.customerId,
+      pointsRedeem: input.pointsRedeem,
+      voucherCode: input.voucherCode ?? undefined,
       createdAt: new Date().toISOString(),
       status: "pending",
     };
@@ -283,6 +360,8 @@ export default function App() {
     setData(null);
     setCart([]);
     setReceipt(null);
+    setParked([]);
+    setRestore(null);
     setView("pos");
   }
 
@@ -353,7 +432,7 @@ export default function App() {
       <header className="topbar">
         <div className="brand">
           <span className="brand-mark">
-            <ShoppingBag className="size-5" strokeWidth={1.8} />
+            <img src="/logo.jpg" alt="Logo Tera POS" className="brand-logo" />
           </span>
           <div className="brand-text">
             <strong>{data.settings.storeName}</strong>
@@ -398,15 +477,49 @@ export default function App() {
 
       <main className="content with-nav">
         <PosScreen
+          key={restoreKey}
+          restore={
+            restore
+              ? {
+                  orderType: restore.orderType,
+                  tableLabel: restore.tableLabel,
+                  customerId: restore.customerId,
+                  voucherCode: restore.voucherCode,
+                  pointsRedeem: restore.pointsRedeem,
+                }
+              : undefined
+          }
           products={data.products}
           categories={data.categories}
+          customers={data.customers}
+          vouchers={data.vouchers}
           settings={data.settings}
           cart={cart}
+          parked={parked}
           onAdd={addProduct}
           onQty={setQty}
           onRemove={removeProduct}
           onClear={() => setCart([])}
-          onCheckout={(method, paid, type, table) => void checkout(method, paid, type, table)}
+          onCheckout={(input) => void checkout(input)}
+          onPark={(ticket) => {
+            setParked((prev) => [
+              ...prev,
+              { ...ticket, id: crypto.randomUUID(), createdAt: Date.now() },
+            ]);
+          }}
+          onTakeParked={(id) => {
+            const entry = parked.find((item) => item.id === id);
+            if (!entry) return;
+            if (cart.length > 0) return;
+            setCart(entry.cart);
+            setRestore(entry);
+            setRestoreKey((value) => value + 1);
+            setParked((prev) => prev.filter((item) => item.id !== id));
+          }}
+          onDiscardParked={(id) => {
+            setParked((prev) => prev.filter((item) => item.id !== id));
+          }}
+          onCreateCustomer={(name, phone) => handleCreateCustomer(name, phone)}
         />
       </main>
 
@@ -414,7 +527,10 @@ export default function App() {
         <button
           type="button"
           className={view === "pos" || view === null ? "active" : ""}
-          onClick={() => setView("pos")}
+          onClick={() => {
+            setView("pos");
+            setRestore(null);
+          }}
         >
           <LayoutGrid />
           Kasir
@@ -612,8 +728,8 @@ function SettingsOverlay({
               {syncing ? "Sinkron…" : "Sinkron sekarang"}
             </button>
             <p className="hint">
-              Pesanan offline diunggah berurutan. Katalog dan stok server menimpa data lokal;
-              pesanan tidak pernah dihapus.
+              Pesanan offline, pelanggan baru, voucher, dan poin diunggah berurutan.
+              Katalog dan stok server menimpa data lokal; pesanan tidak pernah dihapus.
             </p>
           </div>
 

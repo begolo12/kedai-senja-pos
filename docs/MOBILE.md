@@ -28,7 +28,7 @@ GitHub Actions dan dipublikasikan sebagai GitHub Release.
    - Penjualan diterima meski stok server sudah berkurang (offline
      oversell); stok bisa negatif dan muncul sebagai konflik stok.
    - Varian, catatan item, tipe order, dan meja ikut dikirim.
-   - Nomor struk final dibuat server (`KDJ-YYMMDD-NNN`).
+   - Nomor struk final dibuat server (`TRA-YYMMDD-NNN`).
 5. Server mengembalikan snapshot baru: **katalog & stok server menang**.
    Pesanan lokal tidak dihapus; statusnya `synced`/`rejected`.
 6. Konflik yang terlihat: pesanan `rejected` dengan alasan, stok negatif,
@@ -107,3 +107,13 @@ publik agar pemeriksaan rilis berjalan tanpa secret. Izin Android
 - Bukti: `docs/screens/mobile-login-390.png`, `mobile-store-390.png`,
   `mobile-pos-390.png`, `mobile-ticket-390.png`, `mobile-payment-390.png`,
   `mobile-pos-800.png`, `mobile-pos-1024.png`.
+
+## Paritas fitur (baru)
+
+Tablet kini sejajar dengan web untuk: pelanggan (pilih dari daftar atau
+buat baru offline — tersinkron dua arah lewat `newCustomers` di payload
+sync, telepon unik per toko dijadikan kunci dedupe), voucher (kode
+divalidasi ulang di server), tukar poin (nilai tukar dari pengaturan toko),
+dan tunda tiket (parkir pesanan di `localStorage`, tahan restart).
+Kontrak sync bertambah field opsional (`customerId`, `pointsRedeem`,
+`voucherCode`) dengan default aman — versi app lama tetap diterima server.

@@ -1,14 +1,16 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Check, RotateCcw } from "lucide-react";
+import { ArrowLeft, Check, MessageCircle, RotateCcw } from "lucide-react";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { customers, orderItems, orders, users } from "@/lib/db/schema";
+import { customers, orderItems, orderPayments, orders, users } from "@/lib/db/schema";
 import { requireStore } from "@/lib/auth";
 import { getSettings } from "@/lib/settings";
 import { formatDateTime, formatMoney } from "@/lib/money";
 import { Button } from "@/components/ui/button";
 import { PrintButton } from "@/components/receipt/print-button";
+import { ThermalPrintButton } from "@/components/receipt/thermal-print-button";
+import { pair, type EscposLine } from "@/lib/escpos";
 
 export default async function ReceiptPage({ params, searchParams }: PageProps<"/receipt/[id]">) {
   const { user, store } = await requireStore();
@@ -33,11 +35,58 @@ export default async function ReceiptPage({ params, searchParams }: PageProps<"/
   if (user.role !== "admin" && order.order.userId !== user.id) notFound();
 
   const items = await db.select().from(orderItems).where(eq(orderItems.orderId, orderId));
+  const payments = await db
+    .select()
+    .from(orderPayments)
+    .where(eq(orderPayments.orderId, orderId));
   const settings = await getSettings(store.id);
   const isFresh = fresh === "1";
   const cashier = order.cashier;
   const paper = settings.receiptWidth === "58" ? "58" : "80";
   const sheetWidth = paper === "58" ? 300 : 340;
+  const waTarget = order.customerPhone
+    ? `https://wa.me/${normalizePhone(order.customerPhone)}?text=${encodeURIComponent(receiptText(order, items, settings.storeName, settings.currency))}`
+    : null;
+  const thermalWidth = paper === "58" ? 32 : 42;
+  const thermalLines: EscposLine[] = [];
+  thermalLines.push({ kind: "text", text: settings.storeName, bold: true, align: "center" });
+  thermalLines.push({ kind: "text", text: settings.address, align: "center" });
+  if (settings.phone) thermalLines.push({ kind: "text", text: settings.phone, align: "center" });
+  thermalLines.push({ kind: "rule" });
+  thermalLines.push({ kind: "text", text: pair(`No. ${order.order.number}`, formatDateTime(order.order.createdAt), thermalWidth) });
+  thermalLines.push({ kind: "text", text: pair(`Kasir ${cashier}`, methodLabel(payments[0]?.method ?? order.order.paymentMethod), thermalWidth) });
+  thermalLines.push({ kind: "text", text: pair(order.order.orderType === "takeaway" ? "Bungkus" : "Dine-in", order.order.tableLabel ?? "", thermalWidth) });
+  if (order.customerName) {
+    thermalLines.push({ kind: "text", text: pair("Pelanggan", order.customerName, thermalWidth) });
+  }
+  thermalLines.push({ kind: "rule" });
+  for (const item of items) {
+    thermalLines.push({ kind: "text", text: `${item.qty}x ${item.name}` });
+    if (item.note) thermalLines.push({ kind: "text", text: `  * ${item.note}` });
+    thermalLines.push({
+      kind: "text",
+      text: pair(`  ${item.qty} x ${formatMoney(item.unitPrice, settings.currency)}`, formatMoney(item.lineTotal, settings.currency), thermalWidth),
+    });
+  }
+  thermalLines.push({ kind: "rule" });
+  thermalLines.push({ kind: "text", text: pair("Subtotal", formatMoney(order.order.subtotal, settings.currency), thermalWidth) });
+  if (payments.length > 1) {
+    for (const payment of payments) {
+      thermalLines.push({
+        kind: "text",
+        text: pair(`Dibayar ${methodLabel(payment.method)}`, formatMoney(payment.amount, settings.currency), thermalWidth),
+      });
+    }
+  } else {
+    thermalLines.push({ kind: "text", text: pair("Dibayar", formatMoney(order.order.amountPaid, settings.currency), thermalWidth) });
+  }
+  thermalLines.push({ kind: "text", text: pair("Kembali", formatMoney(order.order.changeDue, settings.currency), thermalWidth) });
+  thermalLines.push({ kind: "text", text: pair("TOTAL", formatMoney(order.order.total, settings.currency), thermalWidth), bold: true });
+  if (order.customerName && order.order.pointsEarned > 0) {
+    thermalLines.push({ kind: "text", text: `+${order.order.pointsEarned} poin untuk ${order.customerName}` });
+  }
+  thermalLines.push({ kind: "spaced" });
+  thermalLines.push({ kind: "text", text: settings.receiptFooter, align: "center" });
 
   return (
     <div className="flex min-h-dvh flex-1 flex-col items-center bg-background px-4 py-8 print:block print:bg-white print:p-0">
@@ -48,6 +97,12 @@ export default async function ReceiptPage({ params, searchParams }: PageProps<"/
         </Button>
         <div className="flex gap-2">
           <PrintButton />
+          <ThermalPrintButton lines={thermalLines} />
+          {waTarget ? (
+            <Button nativeButton={false} size="sm" render={<a href={waTarget} target="_blank" rel="noopener noreferrer" />}>
+              <MessageCircle /> WhatsApp
+            </Button>
+          ) : null}
           {user.role === "admin" ? (
             <Button nativeButton={false} size="sm" render={<Link href={`/orders/${orderId}`} />}>
               Detail
@@ -94,7 +149,13 @@ export default async function ReceiptPage({ params, searchParams }: PageProps<"/
           </div>
           <div className="flex justify-between">
             <span>Kasir {cashier}</span>
-            <span>{order.order.paymentMethod.toUpperCase()}</span>
+            <span>
+              {payments.length > 1
+                ? payments
+                    .map((p) => `${methodLabel(p.method)} ${formatMoney(p.amount, settings.currency)}`)
+                    .join(" · ")
+                : order.order.paymentMethod.toUpperCase()}
+            </span>
           </div>
           <div className="flex justify-between">
             <span>{order.order.orderType === "takeaway" ? "Bungkus" : "Dine-in"}</span>
@@ -133,10 +194,22 @@ export default async function ReceiptPage({ params, searchParams }: PageProps<"/
 
         <div className="border-t border-dashed border-[#c9c0b1] pt-3 font-mono text-[11px]">
           <Line label="Subtotal" value={formatMoney(order.order.subtotal, settings.currency)} />
-          {order.order.discountAmount > 0 ? (
+          {(order.order.discountAmount - order.order.voucherAmount - order.order.redeemAmount) > 0 ? (
             <Line
               label="Diskon"
-              value={`−${formatMoney(order.order.discountAmount, settings.currency)}`}
+              value={`−${formatMoney(order.order.discountAmount - order.order.voucherAmount - order.order.redeemAmount, settings.currency)}`}
+            />
+          ) : null}
+          {order.order.voucherAmount > 0 && order.order.voucherCode ? (
+            <Line
+              label={`Voucher ${order.order.voucherCode}`}
+              value={`−${formatMoney(order.order.voucherAmount, settings.currency)}`}
+            />
+          ) : null}
+          {order.order.pointsRedeemed > 0 ? (
+            <Line
+              label={`Tukar ${order.order.pointsRedeemed} poin`}
+              value={`−${formatMoney(order.order.redeemAmount, settings.currency)}`}
             />
           ) : null}
           <Line
@@ -147,13 +220,31 @@ export default async function ReceiptPage({ params, searchParams }: PageProps<"/
             <span>Total</span>
             <span className="tabular">{formatMoney(order.order.total, settings.currency)}</span>
           </div>
-          <Line label="Dibayar" value={formatMoney(order.order.amountPaid, settings.currency)} />
+          {payments.length > 1 ? (
+            payments.map((p) => (
+              <Line
+                key={p.id}
+                label={`Dibayar ${methodLabel(p.method)}`}
+                value={formatMoney(p.amount, settings.currency)}
+              />
+            ))
+          ) : (
+            <Line label="Dibayar" value={formatMoney(order.order.amountPaid, settings.currency)} />
+          )}
           <Line label="Kembali" value={formatMoney(order.order.changeDue, settings.currency)} />
+          {order.order.refundedTotal > 0 && order.order.status !== "refunded" ? (
+            <Line
+              label="Dikembalikan sebagian"
+              value={`−${formatMoney(order.order.refundedTotal, settings.currency)}`}
+            />
+          ) : null}
         </div>
 
         {order.customerName ? (
           <p className="mt-3 border-t border-dashed border-[#c9c0b1] pt-2 text-center font-mono text-[10px] text-[#6b6257]">
-            Poin pelanggan otomatis ditambahkan.
+            {order.order.pointsEarned > 0
+              ? `+${order.order.pointsEarned} poin untuk ${order.customerName}.`
+              : `Poin pelanggan otomatis ditambahkan.`}
           </p>
         ) : null}
 
@@ -169,6 +260,11 @@ export default async function ReceiptPage({ params, searchParams }: PageProps<"/
             <RotateCcw className="size-3" /> Dikembalikan
           </div>
         ) : null}
+        {order.order.status === "partially_refunded" ? (
+          <div className="mt-4 flex items-center justify-center gap-1 border border-[#a33a22] py-1 text-[10px] tracking-[0.18em] text-[#a33a22] uppercase">
+            <RotateCcw className="size-3" /> Dikembalikan sebagian
+          </div>
+        ) : null}
       </article>
 
       <p className="no-print mt-4 max-w-[340px] text-center text-[11px] text-muted-foreground">
@@ -176,6 +272,41 @@ export default async function ReceiptPage({ params, searchParams }: PageProps<"/
       </p>
     </div>
   );
+}
+
+function methodLabel(method: string): string {
+  return method === "cash" ? "Tunai" : method === "qris" ? "QRIS" : "Kartu";
+}
+
+function normalizePhone(phone: string): string {
+  const digits = phone.replace(/\D/g, "");
+  if (digits.startsWith("62")) return digits;
+  if (digits.startsWith("0")) return `62${digits.slice(1)}`;
+  return digits;
+}
+
+function receiptText(
+  order: { order: typeof orders.$inferSelect; cashier: string; customerName: string | null },
+  items: (typeof orderItems.$inferSelect)[],
+  storeName: string,
+  currency: string,
+): string {
+  const lines = [
+    `*${storeName}*`,
+    `Struk ${order.order.number} — ${formatDateTime(order.order.createdAt)}`,
+    "",
+    ...items.map(
+      (item) =>
+        `${item.qty}× ${item.name}${item.note ? ` (${item.note})` : ""} — ${formatMoney(item.lineTotal, currency)}`,
+    ),
+    "",
+    `Total: ${formatMoney(order.order.total, currency)} (${order.order.paymentMethod.toUpperCase()})`,
+  ];
+  if (order.order.pointsEarned > 0 && order.customerName) {
+    lines.push(`Poin ${order.customerName}: +${order.order.pointsEarned}`);
+  }
+  lines.push("", "Terima kasih sudah belanja!");
+  return lines.join("\n");
 }
 
 function Line({ label, value }: { label: string; value: string }) {

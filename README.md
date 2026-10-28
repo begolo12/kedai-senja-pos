@@ -1,15 +1,23 @@
-# Kedai Senja POS
+# Tera POS
 
 POS warkop multi-toko: ricebowl, sushi, minuman bubuk, camilan. Satu akun
 manajemen membuka semua toko; kasir hanya toko yang ditugaskan. Kasir web,
 aplikasi Android offline-first, varian menu, dine-in/bungkus, meja, QRIS,
-stok, shift, laporan per toko, dan struk thermal 58/80 mm.
+stok, shift, laporan per toko, dan struk thermal 58/80 mm. Semua tertera.
+
+Fitur unggulan: tukar poin loyalitas saat checkout, voucher promo berperiode
+dengan kuota (kuota kembali saat refund), pembayaran campuran (split tunai +
+QRIS/kartu), refund parsial per item, tunda tiket (parkir pesanan), purchase
+order ke supplier (stok masuk otomatis saat diterima), struk digital via
+WhatsApp, cetak ESC/POS langsung lewat Bluetooth + buka laci tunai, laporan
+jam sibuk per jam, nomor struk harian `TRA-YYMMDD-NNN`, dan prefix struk baru.
 
 - Web production: https://kedai-senja-pos.vercel.app
 - Repo: https://github.com/begolo12/kedai-senja-pos (publik)
 - APK: https://github.com/begolo12/kedai-senja-pos/releases/latest
 - Rencana: [`docs/PLAN.md`](docs/PLAN.md)
 - Desain: [`docs/DESIGN.md`](docs/DESIGN.md)
+- Brand: [`docs/BRAND.md`](docs/BRAND.md)
 - Printer: [`docs/PRINTER.md`](docs/PRINTER.md)
 - Android/offline: [`docs/MOBILE.md`](docs/MOBILE.md)
 
@@ -45,7 +53,7 @@ Akun development (database lokal kosong):
 | `manajemen` | `123456` | semua toko, semua menu, kelola akun |
 | `kasir` | `123456` | Kemang saja: POS + shift |
 
-Seed berisi dua toko: **Warkop Senja — Kemang** dan **Tebet**. Kasir demo
+Seed berisi dua toko: **Warkop Berkah — Kemang** dan **Tebet**. Kasir demo
 hanya ditugaskan ke Kemang.
 
 PIN production **tidak** ada di repo: diisi lewat `SEED_ADMIN_PIN` /
@@ -99,12 +107,19 @@ apa pun; `.env.local` sudah di-ignore.
 - Pilih produk → varian muncul otomatis (mis. Level 1–5, Less sugar).
 - Tipe **Dine-in** + nomor meja atau **Bungkus**.
 - Catatan per item (mis. tanpa timun) ikut tercetak.
-- Diskon, pajak, tunai/QRIS/kartu.
+- Diskon, pajak, tunai/QRIS/kartu, atau **campuran** beberapa metode
+  (kembalian dihitung dari porsi tunai).
 - QRIS: unggah gambar QRIS merchant di Pengaturan; tampil otomatis di layar bayar.
 - **Impor menu** dari tempelan Excel/CSV; kategori dibuat otomatis, produk
   dengan nama sama diperbarui.
-- Tablet: alur sama, tetap jalan offline; sinkron membawa varian, catatan,
-  tipe order, dan meja.
+- Manajemen: **Pembelian** — purchase order ke supplier; saat PO diterima,
+  stok naik dan tercatat sebagai movement restock.
+- **Refund parsial per item**: pilih item dan jumlahnya; stok, poin, dan
+  total belanja dikoreksi proporsional, refund tunai mengurangi kas
+  seharusnya saat tutup shift.
+- Tablet: alur sama (pelanggan, voucher, tukar poin, tunda tiket), tetap
+  jalan offline; sinkron membawa varian, catatan, tipe order, meja, dan
+  pelanggan yang dibuat offline.
 
 ## Role
 
@@ -138,6 +153,7 @@ riwayat, cetak thermal, update.
 - Login dibatasi percobaan; API mobile `no-store`.
 - Neon TLS; backup mengandalkan Neon PITR.
 
-Batas yang diketahui: refund belum mengurangi kas seharusnya shift; printer
-memakai Android Print Framework/browser (bukan ESC/POS mentah); penjualan
-offline dapat membuat stok server negatif (oversell) dan perlu koreksi stok.
+Batas yang diketahui: cetak ESC/POS langsung butuh printer Bluetooth yang
+kompatibel dan browser dengan Web Bluetooth (Chrome/Edge) — jalur print
+service OS tetap tersedia; penjualan offline dapat membuat stok server
+negatif (oversell) dan perlu koreksi stok.

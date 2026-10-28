@@ -31,7 +31,7 @@ membuka dialog print Android, sama seperti aplikasi kasir lain.
 1. Pasang print service printer di tablet: **Epson iPrint**, **Xprinter**,
    **RawBT**, **Mopria**, atau aplikasi vendor.
 2. Pair printer lewat Bluetooth/USB/LAN di pengaturan Android.
-3. Di aplikasi Kasir Senja, selesaikan pembayaran → **Cetak struk**.
+3. Di aplikasi Tera POS, selesaikan pembayaran → **Cetak struk**.
 4. Pilih printer → cetak.
 
 Plugin mengirim HTML struk ke print service dengan ukuran media sesuai
@@ -57,3 +57,16 @@ sesuai printer.
   lokal/USB—masuk roadmap, bukan perilaku saat ini.
 - Cetak web memakai dialog browser; tidak ada silent print. Untuk kiosk,
   jalankan Chrome dengan `--kiosk-printing` di komputer kasir.
+## ESC/POS langsung (Bluetooth) — baru
+
+Halaman struk web punya tombol **Thermal** dan **Laci**:
+
+- **Thermal**: pasangkan printer thermal Bluetooth sekali (Web Bluetooth,
+  Chrome/Edge desktop atau Android). Struk teks ESC/POS dikirim langsung,
+  diakhiri auto-cut, lalu laci tunai ditendang otomatis (ESC p, pin 2).
+- **Laci**: hanya menendang cash drawer lewat printer yang tersambung.
+- Layout mengikuti lebar kertas pengaturan toko (58/80 mm). Teks ASCII;
+  karakter non-ASCII ditulis sebagai `?` agar panjang byte aman di semua
+  printer.
+- Service/characteristic BLE: `0x18F0` / `0x2AF1` (umum di Epson, Xprinter,
+  Rongta). Printer yang memakai UUID lain jatuh ke jalur print service OS.

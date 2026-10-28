@@ -3,12 +3,15 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
+  Archive,
   ChevronDown,
   Loader2,
   Minus,
+  Pause,
   Plus,
   Search,
   ShoppingBag,
+  TicketPercent,
   Trash2,
   UserRound,
   X,
@@ -57,8 +60,35 @@ type Category = { id: number; name: string; color: string };
 type CustomerOption = { id: number; name: string; phone: string | null; points: number };
 type Line = { id: string; productId: number; qty: number; note: string };
 type PaymentMethod = "cash" | "card" | "qris";
+type PayMode = PaymentMethod | "split";
+type SplitRow = { method: PaymentMethod; input: string };
+type VoucherOption = {
+  code: string;
+  label: string;
+  type: "percent" | "fixed";
+  value: number;
+  minSubtotal: number;
+  startsAt: Date | null;
+  endsAt: Date | null;
+  usageLimit: number;
+  usedCount: number;
+};
+type ParkedTicket = {
+  id: string;
+  label: string;
+  lines: Line[];
+  orderType: "dine_in" | "takeaway";
+  tableLabel: string;
+  customerId: number | null;
+  discountType: DiscountType | null;
+  discountValue: number;
+  voucherCode: string | null;
+  pointsRedeem: number;
+  createdAt: number;
+};
 
 const STORAGE_KEY = "pos.draft.v1";
+const PARKED_KEY = "pos.parked.v1";
 
 const METHODS: { value: PaymentMethod; label: string; hint: string }[] = [
   { value: "cash", label: "Tunai", hint: "Hitung kembalian" },
@@ -73,6 +103,8 @@ export function PosTerminal({
   currency,
   taxRate,
   qrisPayload,
+  pointsValue,
+  vouchers,
 }: {
   products: PosProduct[];
   categories: Category[];
@@ -80,6 +112,8 @@ export function PosTerminal({
   currency: string;
   taxRate: number;
   qrisPayload: string;
+  pointsValue: number;
+  vouchers: VoucherOption[];
 }) {
   const router = useRouter();
   const [lines, setLines] = useState<Line[]>([]);
@@ -97,8 +131,18 @@ export function PosTerminal({
   const [optionChoice, setOptionChoice] = useState("");
   const [optionNote, setOptionNote] = useState("");
   const [paymentOpen, setPaymentOpen] = useState(false);
-  const [method, setMethod] = useState<PaymentMethod>("cash");
+  const [method, setMethod] = useState<PayMode>("cash");
   const [cashInput, setCashInput] = useState("");
+  const [splitRows, setSplitRows] = useState<SplitRow[]>([
+    { method: "cash", input: "" },
+    { method: "qris", input: "" },
+  ]);
+  const [voucherInput, setVoucherInput] = useState("");
+  const [voucher, setVoucher] = useState<VoucherOption | null>(null);
+  const [pointsRedeem, setPointsRedeem] = useState(0);
+  const [parked, setParked] = useState<ParkedTicket[]>([]);
+  const [parkOpen, setParkOpen] = useState(false);
+  const [parkLabel, setParkLabel] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const clientId = useRef<string>(crypto.randomUUID());
@@ -135,13 +179,36 @@ export function PosTerminal({
           );
         }
       }
+      const rawParked = localStorage.getItem(PARKED_KEY);
+      if (rawParked) {
+        const savedParked = JSON.parse(rawParked) as ParkedTicket[];
+        if (Array.isArray(savedParked)) {
+          setParked(
+            savedParked.filter(
+              (entry) =>
+                typeof entry.id === "string" &&
+                typeof entry.label === "string" &&
+                Array.isArray(entry.lines) &&
+                entry.lines.length > 0,
+            ),
+          );
+        }
+      }
     } catch {
       localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(PARKED_KEY);
     }
     setHydrated(true);
     searchRef.current?.focus();
   }, [byId]);
   /* eslint-enable react-hooks/set-state-in-effect */
+
+  useEffect(() => {
+    if (!hydrated) return;
+    if (parked.length === 0) localStorage.removeItem(PARKED_KEY);
+    else localStorage.setItem(PARKED_KEY, JSON.stringify(parked));
+  }, [parked, hydrated]);
+
 
   useEffect(() => {
     if (!hydrated) return;
@@ -187,12 +254,58 @@ export function PosTerminal({
     return product ? [{ ...line, product }] : [];
   });
   const count = lines.reduce((sum, line) => sum + line.qty, 0);
+  const subtotal = cart.reduce((sum, line) => sum + line.product.price * line.qty, 0);
+  const rawManual =
+    discountType === "percent"
+      ? Math.round((subtotal * Math.min(100, Math.max(0, discountValue))) / 100)
+      : discountType === "amount"
+        ? Math.max(0, Math.round(discountValue))
+        : 0;
+  const manualDiscount = Math.min(subtotal, rawManual);
+
+  const customer = customers.find((c) => c.id === customerId) ?? null;
+  const voucherBase = Math.max(0, subtotal - manualDiscount);
+  const rawVoucher = voucher
+    ? voucher.type === "percent"
+      ? Math.round((subtotal * Math.min(100, Math.max(0, voucher.value))) / 100)
+      : Math.max(0, Math.round(voucher.value))
+    : 0;
+  const voucherAmount = voucher ? Math.min(voucherBase, rawVoucher) : 0;
+
+  const redeemBase = Math.max(0, subtotal - manualDiscount - voucherAmount);
+  const maxRedeemPoints =
+    customer && pointsValue > 0
+      ? Math.min(customer.points, Math.floor(redeemBase / pointsValue))
+      : 0;
+  const pointsRedeemed = Math.min(pointsRedeem, maxRedeemPoints);
+  const redeemAmount = pointsRedeemed * pointsValue;
+
   const totals = computeTotals(
     cart.map((line) => ({ unitPrice: line.product.price, qty: line.qty })),
-    { discountType, discountValue, taxRate },
+    {
+      discountType,
+      discountValue,
+      fixedDiscount: voucherAmount + redeemAmount,
+      taxRate,
+    },
   );
   const paid = method === "cash" ? parseMoneyInput(cashInput) : totals.total;
-  const change = paid - totals.total;
+
+  const splitParts = splitRows
+    .map((row) => ({ method: row.method, amount: parseMoneyInput(row.input) }))
+    .filter((row) => row.amount > 0);
+  const splitCash = splitParts
+    .filter((p) => p.method === "cash")
+    .reduce((sum, p) => sum + p.amount, 0);
+  const splitNonCash = splitParts
+    .filter((p) => p.method !== "cash")
+    .reduce((sum, p) => sum + p.amount, 0);
+  const splitChange =
+    splitCash > totals.total - splitNonCash ? splitCash - (totals.total - splitNonCash) : 0;
+  const splitShort = splitCash + splitNonCash < totals.total;
+  const splitOverflow = splitNonCash > totals.total;
+
+  const change = method === "split" ? splitChange : paid - totals.total;
 
   function addLine(product: PosProduct, note = "") {
     const totalQty = lines
@@ -268,10 +381,16 @@ export function PosTerminal({
     chooseProduct(target);
   }
 
-  function openPayment(next: PaymentMethod) {
+  function openPayment(next: PayMode) {
     if (lines.length === 0) {
       toast.error("Keranjang masih kosong.");
       return;
+    }
+    if (next === "split") {
+      setSplitRows([
+        { method: "cash", input: "" },
+        { method: "qris", input: String(Math.round(totals.total / 100)) },
+      ]);
     }
     setMethod(next);
     setCashInput(
@@ -296,12 +415,145 @@ export function PosTerminal({
     );
   }
 
+  function applyVoucher() {
+    const code = voucherInput.trim().toUpperCase();
+    if (!code) {
+      setVoucher(null);
+      return;
+    }
+    const found = vouchers.find((option) => option.code === code) ?? null;
+    if (!found) {
+      toast.error(`Voucher ${code} tidak ditemukan.`);
+      return;
+    }
+    const now = Date.now();
+    if (found.startsAt && found.startsAt.getTime() > now) {
+      toast.error(`Voucher ${code} belum berlaku.`);
+      return;
+    }
+    if (found.endsAt && found.endsAt.getTime() < now) {
+      toast.error(`Voucher ${code} sudah kedaluwarsa.`);
+      return;
+    }
+    if (found.usageLimit > 0 && found.usedCount >= found.usageLimit) {
+      toast.error(`Voucher ${code} sudah habis dipakai.`);
+      return;
+    }
+    if (subtotal < found.minSubtotal) {
+      toast.error(
+        `Voucher ${code} butuh belanja minimal ${formatMoney(found.minSubtotal, currency)}.`,
+      );
+      return;
+    }
+    setVoucher(found);
+    setVoucherInput("");
+    toast.success(`Voucher ${code} dipakai.`);
+  }
+
+  function parkTicket() {
+    if (lines.length === 0) {
+      toast.error("Keranjang masih kosong.");
+      return;
+    }
+    setParkLabel(tableLabel || customer?.name || `Tiket ${parked.length + 1}`);
+    setParkOpen(true);
+  }
+
+  function confirmPark() {
+    if (lines.length === 0) return;
+    const entry: ParkedTicket = {
+      id: crypto.randomUUID(),
+      label: parkLabel.trim() || `Tiket ${parked.length + 1}`,
+      lines,
+      orderType,
+      tableLabel,
+      customerId,
+      discountType,
+      discountValue,
+      voucherCode: voucher?.code ?? null,
+      pointsRedeem,
+      createdAt: Date.now(),
+    };
+    setParked((prev) => [...prev, entry]);
+    setLines([]);
+    setDiscountType(null);
+    setDiscountValue(0);
+    setDiscountDraft("");
+    setCustomerId(null);
+    setTableLabel("");
+    setVoucher(null);
+    setVoucherInput("");
+    setPointsRedeem(0);
+    setParkOpen(false);
+    localStorage.removeItem(STORAGE_KEY);
+    toast.success(`Tiket "${entry.label}" ditunda.`);
+  }
+
+  function takeParked(id: string) {
+    const entry = parked.find((p) => p.id === id);
+    if (!entry) return;
+    if (lines.length > 0) {
+      toast.error("Selesaikan atau tunda tiket aktif dulu.");
+      return;
+    }
+    const validLines = entry.lines.filter((line) => byId.has(line.productId));
+    if (validLines.length === 0) {
+      toast.error("Produk tiket ini sudah tidak tersedia.");
+      setParked((prev) => prev.filter((p) => p.id !== id));
+      return;
+    }
+    setLines(validLines);
+    setOrderType(entry.orderType);
+    setTableLabel(entry.tableLabel);
+    setCustomerId(entry.customerId);
+    setDiscountType(entry.discountType);
+    setDiscountValue(entry.discountValue);
+    setDiscountDraft(
+      entry.discountType
+        ? String(
+            entry.discountType === "amount"
+              ? Math.round(entry.discountValue / 100)
+              : entry.discountValue,
+          )
+        : "",
+    );
+    setVoucher(
+      entry.voucherCode
+        ? (vouchers.find((option) => option.code === entry.voucherCode) ?? null)
+        : null,
+    );
+    setPointsRedeem(entry.pointsRedeem);
+    setParked((prev) => prev.filter((p) => p.id !== id));
+  }
+
+  function discardParked(id: string) {
+    setParked((prev) => prev.filter((p) => p.id !== id));
+  }
+
   function confirmPayment() {
     setError(null);
     if (method === "cash" && paid < totals.total) {
       setError("Uang diterima kurang dari total.");
       return;
     }
+    if (method === "split") {
+      if (splitParts.length === 0) {
+        setError("Isi nominal untuk minimal satu metode pembayaran.");
+        return;
+      }
+      if (splitOverflow) {
+        setError("Total pembayaran non-tunai melebihi tagihan.");
+        return;
+      }
+      if (splitShort) {
+        setError("Total pembayaran kurang dari tagihan.");
+        return;
+      }
+    }
+    const payments =
+      method === "split"
+        ? splitParts
+        : [{ method: method, amount: method === "cash" ? paid : totals.total }];
     startTransition(async () => {
       const result = await checkoutAction({
         clientId: clientId.current,
@@ -314,9 +566,12 @@ export function PosTerminal({
         discountValue,
         orderType,
         tableLabel,
-        paymentMethod: method,
+        paymentMethod: payments[0]?.method ?? "cash",
+        payments,
         amountPaid: paid,
         customerId,
+        pointsRedeem,
+        voucherCode: voucher?.code ?? "",
         note: "",
       });
       if (!result.ok) {
@@ -330,6 +585,9 @@ export function PosTerminal({
       setDiscountDraft("");
       setCustomerId(null);
       setTableLabel("");
+      setVoucher(null);
+      setVoucherInput("");
+      setPointsRedeem(0);
       setPaymentOpen(false);
       localStorage.removeItem(STORAGE_KEY);
       router.push(`/receipt/${result.orderId}?fresh=1`);
@@ -348,7 +606,7 @@ export function PosTerminal({
     .filter((value) => value >= totals.total)
     .slice(0, 5);
 
-  const customer = customers.find((c) => c.id === customerId) ?? null;
+
   const customerResults = customers.filter((c) =>
     `${c.name} ${c.phone ?? ""}`.toLowerCase().includes(customerQuery.toLowerCase()),
   );
@@ -463,21 +721,66 @@ export function PosTerminal({
             </p>
             <h2 className="font-serif text-2xl leading-none">Pesanan baru</h2>
           </div>
-          {lines.length > 0 ? (
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Kosongkan pesanan"
-              onClick={() => {
-                setLines([]);
-                setDiscountType(null);
-                setDiscountValue(0);
-              }}
-            >
-              <Trash2 className="size-4" />
-            </Button>
-          ) : null}
+          <div className="flex items-center gap-1">
+            {lines.length > 0 ? (
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Tunda tiket"
+                title="Tunda tiket (parkir)"
+                onClick={parkTicket}
+              >
+                <Pause className="size-4" />
+              </Button>
+            ) : null}
+            {lines.length > 0 ? (
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Kosongkan pesanan"
+                onClick={() => {
+                  setLines([]);
+                  setDiscountType(null);
+                  setDiscountValue(0);
+                  setVoucher(null);
+                  setVoucherInput("");
+                  setPointsRedeem(0);
+                }}
+              >
+                <Trash2 className="size-4" />
+              </Button>
+            ) : null}
+          </div>
         </div>
+
+        {parked.length > 0 ? (
+          <div className="flex flex-wrap gap-1.5 border-b border-border bg-muted/40 px-4 py-2">
+            {parked.map((entry) => (
+              <span
+                key={entry.id}
+                className="flex items-center gap-1 border border-border bg-card px-1.5 py-0.5 text-[11px]"
+              >
+                <button
+                  type="button"
+                  onClick={() => takeParked(entry.id)}
+                  className="flex items-center gap-1 text-left"
+                  title={`Ambil tiket ${entry.label}`}
+                >
+                  <Archive className="size-3 text-muted-foreground" />
+                  <span className="max-w-28 truncate">{entry.label}</span>
+                </button>
+                <button
+                  type="button"
+                  aria-label={`Buang tiket ${entry.label}`}
+                  onClick={() => discardParked(entry.id)}
+                  className="text-muted-foreground hover:text-destructive"
+                >
+                  <X className="size-3" />
+                </button>
+              </span>
+            ))}
+          </div>
+        ) : null}
 
         <div className="grid grid-cols-2 gap-1 border-b border-border px-4 py-2">
           <button
@@ -701,15 +1004,119 @@ export function PosTerminal({
             </div>
           </div>
 
+          <div className="mt-2 flex items-center gap-1.5">
+            <span className="flex items-center gap-1 text-[10px] tracking-[0.14em] text-muted-foreground uppercase">
+              <TicketPercent className="size-3" />
+              Voucher
+            </span>
+            {voucher ? (
+              <div className="ml-auto flex items-center gap-1">
+                <span className="flex items-center gap-1 border border-signal/60 bg-signal/5 px-1.5 py-0.5 font-mono text-[10px] text-signal">
+                  {voucher.code}
+                  {voucherAmount > 0 ? ` · −${formatMoney(voucherAmount, currency)}` : ""}
+                </span>
+                <button
+                  type="button"
+                  aria-label="Lepas voucher"
+                  onClick={() => setVoucher(null)}
+                  className="text-muted-foreground hover:text-destructive"
+                >
+                  <X className="size-3" />
+                </button>
+              </div>
+            ) : (
+              <div className="ml-auto flex items-center gap-1">
+                <Input
+                  value={voucherInput}
+                  onChange={(event) =>
+                    setVoucherInput(
+                      event.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, ""),
+                    )
+                  }
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      applyVoucher();
+                    }
+                  }}
+                  placeholder="KODE"
+                  aria-label="Kode voucher"
+                  maxLength={32}
+                  className="h-6 w-24 rounded-none border-border bg-transparent px-1.5 text-right font-mono text-[11px]"
+                />
+                <button
+                  type="button"
+                  onClick={applyVoucher}
+                  disabled={!voucherInput.trim()}
+                  className="h-6 border border-border px-2 font-mono text-[10px] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground disabled:opacity-40"
+                >
+                  Pakai
+                </button>
+              </div>
+            )}
+          </div>
+
+          {customer && pointsValue > 0 && customer.points > 0 ? (
+            <div className="mt-2 flex items-center gap-1.5">
+              <span className="text-[10px] tracking-[0.14em] text-muted-foreground uppercase">
+                Tukar poin
+              </span>
+              <div className="ml-auto flex items-center gap-1">
+                <span className="font-mono text-[10px] text-muted-foreground">
+                  {customer.points} tersedia
+                </span>
+                <Input
+                  value={pointsRedeem || ""}
+                  onChange={(event) =>
+                    setPointsRedeem(
+                      Math.max(
+                        0,
+                        Math.min(
+                          100_000,
+                          Number(event.target.value.replace(/[^\d]/g, "") || 0),
+                        ),
+                      ),
+                    )
+                  }
+                  inputMode="numeric"
+                  placeholder="0"
+                  aria-label="Jumlah poin ditukar"
+                  className="h-6 w-16 rounded-none border-border bg-transparent px-1.5 text-right font-mono text-[11px]"
+                />
+                {maxRedeemPoints > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => setPointsRedeem(maxRedeemPoints)}
+                    className="h-6 border border-border px-2 font-mono text-[10px] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
+                  >
+                    maks
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+
           <dl className="mt-3 space-y-1 text-[12px]">
             <div className="flex justify-between text-muted-foreground">
               <dt>Subtotal</dt>
               <dd className="font-mono tabular">{formatMoney(totals.subtotal, currency)}</dd>
             </div>
-            {totals.discountAmount > 0 ? (
+            {manualDiscount > 0 ? (
               <div className="flex justify-between text-signal">
                 <dt>Diskon</dt>
-                <dd className="font-mono tabular">−{formatMoney(totals.discountAmount, currency)}</dd>
+                <dd className="font-mono tabular">−{formatMoney(manualDiscount, currency)}</dd>
+              </div>
+            ) : null}
+            {voucherAmount > 0 ? (
+              <div className="flex justify-between text-signal">
+                <dt>Voucher {voucher?.code}</dt>
+                <dd className="font-mono tabular">−{formatMoney(voucherAmount, currency)}</dd>
+              </div>
+            ) : null}
+            {redeemAmount > 0 ? (
+              <div className="flex justify-between text-signal">
+                <dt>Tukar {pointsRedeemed} poin</dt>
+                <dd className="font-mono tabular">−{formatMoney(redeemAmount, currency)}</dd>
               </div>
             ) : null}
             <div className="flex justify-between text-muted-foreground">
@@ -727,7 +1134,7 @@ export function PosTerminal({
             </span>
           </div>
 
-          <div className="mt-3 grid grid-cols-3 gap-1.5">
+          <div className="mt-3 grid grid-cols-4 gap-1.5">
             {METHODS.map((m) => (
               <Button
                 key={m.value}
@@ -741,6 +1148,16 @@ export function PosTerminal({
                 {m.label}
               </Button>
             ))}
+            <Button
+              type="button"
+              onClick={() => openPayment("split")}
+              disabled={lines.length === 0}
+              variant="outline"
+              className="h-10 flex-col gap-0 px-1 text-[11px] leading-none"
+              title="Beberapa metode sekaligus"
+            >
+              Campur
+            </Button>
           </div>
         </div>
       </aside>
@@ -758,8 +1175,9 @@ export function PosTerminal({
           <DialogHeader>
             <DialogTitle className="font-serif text-2xl">Pembayaran</DialogTitle>
             <DialogDescription>
-              {METHODS.find((m) => m.value === method)?.label} ·{" "}
-              {METHODS.find((m) => m.value === method)?.hint}
+              {method === "split"
+                ? "Campuran · beberapa metode sekaligus"
+                : `${METHODS.find((m) => m.value === method)?.label} · ${METHODS.find((m) => m.value === method)?.hint}`}
             </DialogDescription>
           </DialogHeader>
 
@@ -772,7 +1190,7 @@ export function PosTerminal({
             </p>
           </div>
 
-          <div className="grid grid-cols-3 gap-1.5">
+          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
             {METHODS.map((m) => (
               <Button
                 key={m.value}
@@ -787,9 +1205,105 @@ export function PosTerminal({
                 {m.label}
               </Button>
             ))}
+            <Button
+              type="button"
+              size="sm"
+              variant={method === "split" ? "default" : "outline"}
+              onClick={() => {
+                setSplitRows([
+                  { method: "cash", input: "" },
+                  { method: "qris", input: String(Math.round(totals.total / 100)) },
+                ]);
+                setMethod("split");
+                setError(null);
+              }}
+            >
+              Campur
+            </Button>
           </div>
 
-          {method === "cash" ? (
+          {method === "split" ? (
+            <div className="space-y-2">
+              {splitRows.map((row, index) => (
+                <div
+                  key={index}
+                  className="flex flex-wrap items-center gap-1.5 border border-border px-2 py-1.5"
+                >
+                  <div className="flex gap-1">
+                    {METHODS.map((m) => (
+                      <button
+                        key={m.value}
+                        type="button"
+                        onClick={() =>
+                          setSplitRows((prev) =>
+                            prev.map((r, i) => (i === index ? { ...r, method: m.value } : r)),
+                          )
+                        }
+                        className={cn(
+                          "h-7 border px-2 text-[11px]",
+                          row.method === m.value
+                            ? "border-foreground bg-foreground text-background"
+                            : "border-border text-muted-foreground",
+                        )}
+                      >
+                        {m.label}
+                      </button>
+                    ))}
+                  </div>
+                  <Input
+                    value={row.input ? formatNumber(parseMoneyInput(row.input) / 100) : ""}
+                    onChange={(event) =>
+                      setSplitRows((prev) =>
+                        prev.map((r, i) =>
+                          i === index
+                            ? { ...r, input: event.target.value.replace(/[^\d]/g, "") }
+                            : r,
+                        ),
+                      )
+                    }
+                    inputMode="numeric"
+                    aria-label={`Nominal ${METHODS.find((m) => m.value === row.method)?.label}`}
+                    className="ml-auto h-8 w-32 rounded-none border-border text-right font-mono text-sm"
+                  />
+                  {splitRows.length > 1 ? (
+                    <button
+                      type="button"
+                      aria-label="Hapus baris pembayaran"
+                      onClick={() => setSplitRows((prev) => prev.filter((_, i) => i !== index))}
+                      className="text-muted-foreground hover:text-destructive"
+                    >
+                      <X className="size-3.5" />
+                    </button>
+                  ) : null}
+                </div>
+              ))}
+              {splitRows.length < 4 ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    setSplitRows((prev) => [...prev, { method: "card", input: "" }])
+                  }
+                >
+                  <Plus /> Tambah metode
+                </Button>
+              ) : null}
+              <div className="flex items-center justify-between border-t border-dashed pt-2 text-xs">
+                <span className="text-muted-foreground">
+                  Terbayar {formatMoney(splitCash + splitNonCash, currency)}
+                </span>
+                <span className={cn("font-mono tabular", splitChange > 0 ? "text-signal" : "")}>
+                  Kembalian {formatMoney(splitChange, currency)}
+                </span>
+              </div>
+              {qrisPayload ? null : (
+                <p className="text-[11px] text-muted-foreground">
+                  Nominal QRIS ditampilkan di struk; tunai mengisi sisanya.
+                </p>
+              )}
+            </div>
+          ) : method === "cash" ? (
             <div className="space-y-2">
               <label
                 htmlFor="cash-received"
@@ -866,7 +1380,12 @@ export function PosTerminal({
 
           <Button
             onClick={confirmPayment}
-            disabled={pending || (method === "cash" && change < 0)}
+            disabled={
+              pending ||
+              (method === "cash" && change < 0) ||
+              (method === "split" &&
+                (splitShort || splitOverflow || splitParts.length === 0))
+            }
             className="h-11 w-full bg-signal text-signal-foreground hover:bg-signal/90"
           >
             {pending ? <Loader2 className="animate-spin" /> : null}
@@ -875,6 +1394,53 @@ export function PosTerminal({
         </DialogContent>
       </Dialog>
 
+
+      <Dialog
+        open={parkOpen}
+        onOpenChange={(open) => {
+          if (!open) setParkOpen(false);
+        }}
+      >
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-serif text-2xl">Tunda tiket</DialogTitle>
+            <DialogDescription>
+              Tiket disimpan di perangkat ini dan bisa diambil kapan saja — pelanggan
+              kembali menambah pesanan atau rombongan bergantian bayar.
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              confirmPark();
+            }}
+            className="space-y-3"
+          >
+            <div className="space-y-1.5">
+              <label
+                htmlFor="park-label"
+                className="text-[10px] tracking-[0.14em] text-muted-foreground uppercase"
+              >
+                Nama tiket
+              </label>
+              <Input
+                id="park-label"
+                value={parkLabel}
+                onChange={(event) => setParkLabel(event.target.value)}
+                placeholder="Meja 4 / Bu Sari"
+                maxLength={40}
+                autoFocus
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {count} item · {formatMoney(totals.total, currency)}
+            </p>
+            <Button type="submit" className="w-full bg-signal text-signal-foreground hover:bg-signal/90">
+              <Pause /> Tunda tiket
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
       <Dialog
         open={Boolean(optionProduct)}
         onOpenChange={(open) => {

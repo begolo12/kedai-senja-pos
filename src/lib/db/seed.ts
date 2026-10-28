@@ -4,9 +4,13 @@ import {
   categories,
   customers,
   orderItems,
+  orderPayments,
   orders,
   products,
+  purchaseOrderItems,
+  purchaseOrders,
   stores,
+  suppliers,
   userStores,
   users,
 } from "./schema";
@@ -83,13 +87,13 @@ function lcg(seed: number) {
 const SEED_STORES = [
   {
     code: "kemang",
-    name: "Warkop Senja — Kemang",
+    name: "Warkop Berkah — Kemang",
     address: "Jl. Kemang Selatan No. 18, Jakarta Selatan",
     phone: "021 719 2288",
   },
   {
     code: "tebet",
-    name: "Warkop Senja — Tebet",
+    name: "Warkop Berkah — Tebet",
     address: "Jl. Tebet Timur Dalam No. 7, Jakarta Selatan",
     phone: "021 829 4411",
   },
@@ -125,7 +129,7 @@ export async function seedIfEmpty(db: DB) {
           currency: "IDR",
           taxRate: 1100,
           receiptWidth: "80" as const,
-          receiptFooter: "Terima kasih. Sampai jumpa di senja berikutnya.",
+          receiptFooter: "Terima kasih. Semua sudah tertera.",
           pointsPerAmount: 1_000_000,
           active: true,
         })),
@@ -159,6 +163,8 @@ export async function seedIfEmpty(db: DB) {
       storeId: storeRows[0].id,
     });
 
+    let productRows: { id: number; name: string; sku: string; price: number; cost: number }[] = [];
+
     for (const [storeIndex, store] of storeRows.entries()) {
       const catRows = await tx
         .insert(categories)
@@ -171,7 +177,7 @@ export async function seedIfEmpty(db: DB) {
         .returning({ id: categories.id, name: categories.name });
       const catId = new Map(catRows.map((c) => [c.name, c.id]));
 
-      const productRows = await tx
+      productRows = await tx
         .insert(products)
         .values(
           SEED_PRODUCTS.map((product) => ({
@@ -284,6 +290,10 @@ export async function seedIfEmpty(db: DB) {
             })
             .returning({ id: orders.id });
 
+          await tx
+            .insert(orderPayments)
+            .values({ orderId: order.id, method, amount: totals.total });
+
           await tx.insert(orderItems).values(
             lines.map((line) => ({
               orderId: order.id,
@@ -309,5 +319,53 @@ export async function seedIfEmpty(db: DB) {
         }
       }
     }
+
+    // Contoh supplier dan satu PO berjalan agar halaman Pembelian tidak kosong.
+    const supplierIds: number[] = [];
+    for (const supplier of [
+      {
+        storeId: storeRows[0].id,
+        name: "Toko Bahan Segar",
+        phone: "0812 1111 2222",
+        note: "Sayur, ayam, dan telur — PO sehari sebelumnya.",
+        active: true,
+      },
+      {
+        storeId: storeRows[0].id,
+        name: "Distributor Kopi Nusantara",
+        phone: "021 555 0199",
+        note: "Bubuk minuman, dikirim tiap Selasa.",
+        active: true,
+      },
+    ]) {
+      const [row] = await tx
+        .insert(suppliers)
+        .values(supplier)
+        .returning({ id: suppliers.id });
+      supplierIds.push(row.id);
+    }
+
+    const poProducts = productRows.slice(0, 3);
+    const [po] = await tx
+      .insert(purchaseOrders)
+      .values({
+        storeId: storeRows[0].id,
+        supplierId: supplierIds[0],
+        userId: admin.id,
+        note: "Restock mingguan",
+        totalCost: poProducts.reduce((sum, item) => sum + item.cost * 10, 0),
+        expectedAt: new Date(Date.now() + 2 * 86_400_000),
+      })
+      .returning({ id: purchaseOrders.id });
+    await tx.insert(purchaseOrderItems).values(
+      poProducts.map((item) => ({
+        purchaseOrderId: po.id,
+        productId: item.id,
+        name: item.name,
+        unit: "porsi",
+        qty: 10,
+        unitCost: item.cost,
+      })),
+    );
   });
 }

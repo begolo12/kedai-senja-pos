@@ -39,8 +39,8 @@ export default async function SelectStorePage({
       <header className="border-b border-border bg-sidebar px-5 py-6 text-sidebar-foreground sm:px-10">
         <div className="mx-auto flex max-w-5xl flex-wrap items-end justify-between gap-4">
           <div>
-            <p className="text-[10px] tracking-[0.22em] text-sidebar-foreground/60 uppercase">
-              Kasir Senja · {pending ? "Masuk" : "Ganti toko"}
+            <p className="flex items-center gap-2 text-[10px] tracking-[0.22em] text-sidebar-foreground/60 uppercase">
+              Tera POS · {pending ? "Masuk" : "Ganti toko"}
             </p>
             <h1 className="mt-2 font-serif text-4xl leading-none">Pilih toko</h1>
             <p className="mt-2 text-sm text-sidebar-foreground/60">
