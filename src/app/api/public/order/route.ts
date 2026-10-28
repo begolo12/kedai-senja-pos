@@ -30,7 +30,7 @@ export async function POST(request: Request) {
   const data = parsed.data;
 
   const found = await db
-    .select({ id: stores.id })
+    .select({ id: stores.id, taxRate: stores.taxRate })
     .from(stores)
     .where(and(eq(stores.code, data.storeCode.toLowerCase()), eq(stores.active, true)))
     .limit(1);
@@ -50,6 +50,7 @@ export async function POST(request: Request) {
         tableLabel: null,
         note: "Self-order pelanggan",
         items: data.items,
+        taxRate: store.taxRate,
       });
       if (!order.ok) return order;
       // Nomor pesanan dari insert pertama sudah cukup; tidak ada retry klien.

@@ -16,7 +16,7 @@ import { TableQr } from "@/components/tables/table-qr";
 export const metadata: Metadata = { title: "Meja" };
 
 export default async function TablesPage() {
-  const { user, store } = await requireAdmin();
+  const { store } = await requireAdmin();
   const settings = await getSettings(store.id);
 
   const [tableRows, openOrders, customerList] = await Promise.all([
@@ -145,7 +145,6 @@ export default async function TablesPage() {
                     tables={tableRows
                       .filter((table) => table.active)
                       .map((table) => ({ id: table.id, name: table.name }))}
-                    currency={settings.currency}
                   />
                   <MergeOrdersDialog
                     sourceId={order.id}

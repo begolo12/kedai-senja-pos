@@ -112,6 +112,7 @@ export async function createOpenOrderInTx(
     tableLabel: string | null;
     note: string | null;
     items: { productId: number; qty: number; note?: string }[];
+    taxRate: number;
   },
 ): Promise<OpenOrderResult> {
   const items = input.items;
@@ -174,6 +175,10 @@ export async function createOpenOrderInTx(
     lineTotal: product!.price * qty,
   }));
   const subtotal = lines.reduce((sum, line) => sum + line.lineTotal, 0);
+  // Pajak diterapkan saat tagihan dibuka agar konsisten dengan checkout
+  // langsung dan merge; diskon baru muncul saat settle/merge.
+  const taxAmount = Math.round((subtotal * input.taxRate) / 10000);
+  const total = subtotal + taxAmount;
   const createdAt = new Date();
 
   await tx.execute(sql`select pg_advisory_xact_lock(771122)`);
@@ -199,7 +204,8 @@ export async function createOpenOrderInTx(
       userId: input.userId,
       tableId: input.tableId,
       subtotal,
-      total: subtotal,
+      taxAmount,
+      total,
       costTotal: lines.reduce((sum, line) => sum + line.product.cost * line.qty, 0),
       orderType: "dine_in",
       tableLabel,
@@ -233,7 +239,7 @@ export async function createOpenOrderInTx(
   });
   if (!deducted.ok) return { ok: false as const, error: deducted.error };
 
-  return { ok: true, orderId: order.id, number: order.number, total: subtotal };
+  return { ok: true, orderId: order.id, number: order.number, total };
 }
 
 /** Kasir membuka tagihan meja dari keranjang: bayar nanti di halaman Meja. */
@@ -286,6 +292,7 @@ export async function createOpenOrderAction(input: unknown): Promise<OpenOrderRe
       tableLabel: typeof data.tableLabel === "string" ? data.tableLabel.slice(0, 40) : null,
       note: typeof data.note === "string" ? data.note.slice(0, 200) : null,
       items: data.items as { productId: number; qty: number; note?: string }[],
+      taxRate: store.taxRate,
     });
   });
 
@@ -336,9 +343,6 @@ export async function settleOrderAction(
       return { ok: false as const, error: "Tagihan ini sudah diselesaikan." };
     }
 
-    // Ambil pengaturan dan tier lewat koneksi transaksi, buka pool baru
-    // di dalam transaksi akan menyumbat backend single-connection (PGlite).
-    const taxRate = store.taxRate;
     const cashTotal = list
       .filter((p) => p.method === "cash")
       .reduce((sum, p) => sum + p.amount, 0);

@@ -22,10 +22,6 @@ function bleSupported(): boolean {
   return typeof navigator !== "undefined" && "bluetooth" in navigator;
 }
 
-function usbSupported(): boolean {
-  return typeof navigator !== "undefined" && "usb" in navigator;
-}
-
 async function connectBle(): Promise<(bytes: number[]) => Promise<void>> {
   const device = await (
     navigator as Navigator & {

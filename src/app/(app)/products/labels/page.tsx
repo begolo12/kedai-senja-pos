@@ -1,13 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { and, asc, eq, inArray } from "drizzle-orm";
-import { Printer } from "lucide-react";
 import { db } from "@/lib/db";
 import { products } from "@/lib/db/schema";
 import { requireAdmin } from "@/lib/auth";
 import { getSettings } from "@/lib/settings";
 import { formatMoney } from "@/lib/money";
-import { Button } from "@/components/ui/button";
 import { PrintButton } from "@/components/receipt/print-button";
 import { BarcodeSvg } from "@/components/barcode-svg";
 

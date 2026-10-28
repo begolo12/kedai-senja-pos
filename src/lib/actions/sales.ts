@@ -10,7 +10,6 @@ import {
   orders,
   products,
   shifts,
-  stockMovements,
   vouchers,
 } from "@/lib/db/schema";
 import { assertAdmin, assertStore } from "@/lib/auth";

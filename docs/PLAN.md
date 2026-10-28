@@ -152,6 +152,7 @@ eksplisit lewat `pnpm db:setup`; tidak ada DDL otomatis di request path.
 - CRUD meja (admin, menu Meja): nama unik, jumlah kursi, aktif/nonaktif.
 - **Tagihan meja**: kasir membuka tagihan lewat tombol "Tagih nanti (meja)"
   atau pelanggan lewat QR; pesanan berstatus `open`, stok langsung dipotong,
+  pajak diterapkan saat tagihan dibuka (konsisten dengan checkout langsung),
   muncul di KDS; dibayar (settle) di halaman Meja dengan poin tier.
 - **Pindah meja** dan **gabung tagihan** (admin) untuk tagihan terbuka;
   gabung memindahkan item dan menghitung ulang total.

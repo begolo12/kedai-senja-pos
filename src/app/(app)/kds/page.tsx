@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { and, asc, eq, gte, inArray, ne, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, ne } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { orderItems, orders } from "@/lib/db/schema";
 import { requireStore } from "@/lib/auth";

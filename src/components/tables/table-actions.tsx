@@ -20,12 +20,10 @@ export function MoveTableDialog({
   orderId,
   number,
   tables,
-  currency,
 }: {
   orderId: number;
   number: string;
   tables: { id: number; name: string }[];
-  currency: string;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
