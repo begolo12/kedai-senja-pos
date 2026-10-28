@@ -90,7 +90,10 @@ export function MobileNav({ role }: { role: "admin" | "cashier" }) {
       >
         <Menu />
       </SheetTrigger>
-      <SheetContent side="left" className="w-72 bg-sidebar p-0 text-sidebar-foreground">
+      <SheetContent
+        side="left"
+        className="sidebar-scroll w-72 overflow-y-auto bg-sidebar p-0 text-sidebar-foreground"
+      >
         <SheetHeader className="border-b border-sidebar-border px-5 py-5">
           <SheetTitle className="flex items-center gap-2 font-serif text-2xl text-sidebar-foreground">
             <TeraMark className="size-7 rounded-[4px] object-cover" />
