@@ -127,7 +127,12 @@ export const customers = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (t) => [uniqueIndex("customers_store_phone_idx").on(t.storeId, t.phone)],
+  (t) => [
+    uniqueIndex("customers_store_phone_idx").on(t.storeId, t.phone),
+    // Jalur panas kasir: picker pelanggan WHERE storeId ORDER BY name
+    // (dan fondasi untuk pencarian nama). Aditif, tidak mengubah perilaku.
+    index("customers_store_name_idx").on(t.storeId, t.name),
+  ],
 );
 
 export const shifts = pgTable(

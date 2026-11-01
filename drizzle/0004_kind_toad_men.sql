@@ -1,0 +1,1 @@
+CREATE INDEX "customers_store_name_idx" ON "customers" USING btree ("store_id","name");
