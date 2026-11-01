@@ -368,11 +368,15 @@ export async function refundOrderAction(
   orderId: number,
   reason: string,
 ): Promise<RefundResult> {
-  // Full refund: every item at its remaining quantity.
+  const auth = await assertAdmin();
+  if (!auth.ok) return auth;
+  // Full refund: every item at its remaining quantity. Scoped ke toko
+  // sesi agar id pesanan toko lain tidak terbaca sebelum otorisasi penuh.
   const items = await db
     .select({ id: orderItems.id, remaining: sql<number>`${orderItems.qty} - ${orderItems.refundedQty}` })
     .from(orderItems)
-    .where(eq(orderItems.orderId, orderId));
+    .innerJoin(orders, eq(orderItems.orderId, orders.id))
+    .where(and(eq(orderItems.orderId, orderId), eq(orders.storeId, auth.store.id)));
   return refundOrderItems(
     orderId,
     items.map((item) => ({ itemId: item.id, qty: Number(item.remaining) })),

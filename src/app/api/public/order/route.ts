@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { stores } from "@/lib/db/schema";
-import { createOpenOrderInTx } from "@/lib/actions/tables";
+import { createOpenOrderInTx } from "@/lib/open-order";
 
 export const runtime = "nodejs";
 
