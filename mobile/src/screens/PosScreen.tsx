@@ -1,4 +1,4 @@
-import { useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref } from "react";
+import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { ArrowRight, Pause, ScanLine, ShoppingBag, TicketPercent, X } from "lucide-react";
 import { computeTotals, formatMoney, formatNumber, parseMoneyInput } from "../lib/money";
@@ -114,7 +114,7 @@ export function PosScreen({
   const customer = customers.find((entry) => entry.id === customerId) ?? null;
 
   // Ditutup satu per satu oleh tombol back Android (via App.tsx).
-  const closeTopDialog = (): boolean => {
+  const closeTopDialog = useCallback((): boolean => {
     if (paymentOpen) {
       setPaymentOpen(false);
       return true;
@@ -142,16 +142,9 @@ export function PosScreen({
       return true;
     }
     return false;
-  };
+  }, [paymentOpen, optionProduct, scanOpen, customerOpen, parkOpen, cartOpen]);
 
-  useImperativeHandle(ref, () => ({ closeTopDialog }), [
-    paymentOpen,
-    optionProduct,
-    scanOpen,
-    customerOpen,
-    parkOpen,
-    cartOpen,
-  ]);
+  useImperativeHandle(ref, () => ({ closeTopDialog }), [closeTopDialog]);
 
   // Id lokal negatif yang sudah terunggah: alihkan pilihan ke id server
   // supaya nama pelanggan tetap tampil setelah sinkron.

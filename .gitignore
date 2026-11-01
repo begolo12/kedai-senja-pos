@@ -48,6 +48,7 @@ next-env.d.ts
 
 # local PGlite data
 /.pgdata
+/.pgdata.bak-*
 
 # mobile / local infra
 mobile/node_modules
