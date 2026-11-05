@@ -164,6 +164,29 @@ export const shifts = pgTable(
   ],
 );
 
+/** Kas keluar operasional dari laci shift: gas, bensin, gaji harian, dll. */
+export const expenses = pgTable(
+  "expenses",
+  {
+    id: serial("id").primaryKey(),
+    storeId: integer("store_id")
+      .notNull()
+      .references(() => stores.id, { onDelete: "cascade" }),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id),
+    shiftId: integer("shift_id").references(() => shifts.id, {
+      onDelete: "set null",
+    }),
+    amount: bigint("amount", { mode: "number" }).notNull(),
+    note: text("note").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index("expenses_store_created_idx").on(t.storeId, t.createdAt)],
+);
+
 export const orders = pgTable(
   "orders",
   {

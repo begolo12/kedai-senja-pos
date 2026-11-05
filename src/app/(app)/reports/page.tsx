@@ -55,6 +55,12 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
     where store_id = ${store.id} and refunded_total > 0 and created_at >= ${new Date(start)} and created_at < ${new Date(end)}
   `))[0];
 
+  const expenseRows = await rows<{ total: number; count: number }>(sql`
+    select coalesce(sum(amount), 0) as total, count(*) as count
+    from expenses
+    where store_id = ${store.id} and created_at >= ${new Date(start)} and created_at < ${new Date(end)}
+  `);
+
   const rawSeries = await rows<RevenuePoint>(sql`
     select to_char(created_at at time zone 'Asia/Jakarta', 'YYYY-MM-DD') as day,
            coalesce(sum(total - refunded_total), 0) as revenue,
@@ -202,9 +208,10 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
         </div>
       </form>
 
-      <section className="grid gap-px border border-border bg-border sm:grid-cols-2 lg:grid-cols-4">
+      <section className="grid gap-px border border-border bg-border sm:grid-cols-2 lg:grid-cols-5">
         <Kpi label="Pendapatan" value={formatMoney(revenue, settings.currency)} note={`${orders} pesanan selesai`} accent />
         <Kpi label="Laba kotor" value={formatMoney(profit, settings.currency)} note={`Margin ${revenue > 0 ? Math.round((profit / revenue) * 100) : 0}%`} />
+        <Kpi label="Pengeluaran" value={formatMoney(Number(expenseRows[0]?.total ?? 0), settings.currency)} note={`${expenseRows[0]?.count ?? 0} kas keluar`} />
         <Kpi label="Rata-rata / pesanan" value={formatMoney(avg, settings.currency)} note={`Diskon ${formatMoney(Number(summary?.discount ?? 0), settings.currency)}`} />
         <Kpi label="Refund" value={formatMoney(Number(refunds?.value ?? 0), settings.currency)} note={`${refunds?.count ?? 0} pesanan terdampak`} />
       </section>

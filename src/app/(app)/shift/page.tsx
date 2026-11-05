@@ -2,14 +2,14 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { shifts, users } from "@/lib/db/schema";
+import { expenses, shifts, users } from "@/lib/db/schema";
 import { requireStore } from "@/lib/auth";
 import { getSettings } from "@/lib/settings";
 import { getOpenShift, getShiftSummary } from "@/lib/shifts";
 import { formatDateTime, formatMoney } from "@/lib/money";
 import { Button } from "@/components/ui/button";
 import { PageHeader, SectionLabel } from "@/components/shared/page-header";
-import { CloseShiftForm, OpenShiftForm } from "@/components/shift/shift-forms";
+import { CloseShiftForm, ExpenseForm, OpenShiftForm } from "@/components/shift/shift-forms";
 
 export const metadata: Metadata = { title: "Shift" };
 
@@ -20,10 +20,26 @@ export default async function ShiftPage() {
 
   const summary = current
     ? await getShiftSummary(current.id, store.id)
-    : { orderCount: 0, grossSales: 0, netSales: 0, cashIn: 0, refundTotal: 0, cashRefundOut: 0 };
+    : { orderCount: 0, grossSales: 0, netSales: 0, cashIn: 0, refundTotal: 0, cashRefundOut: 0, expenseTotal: 0 };
   const expectedCash = current
-    ? current.openingFloat + summary.cashIn - summary.cashRefundOut
+    ? current.openingFloat + summary.cashIn - summary.cashRefundOut - summary.expenseTotal
     : 0;
+
+  const shiftExpenses = current
+    ? await db
+        .select({
+          id: expenses.id,
+          amount: expenses.amount,
+          note: expenses.note,
+          createdAt: expenses.createdAt,
+          by: users.name,
+        })
+        .from(expenses)
+        .innerJoin(users, eq(expenses.userId, users.id))
+        .where(and(eq(expenses.shiftId, current.id), eq(expenses.storeId, store.id)))
+        .orderBy(desc(expenses.createdAt))
+        .limit(8)
+    : [];
 
   const history = await db
     .select({
@@ -50,6 +66,7 @@ export default async function ShiftPage() {
       />
 
       {current ? (
+        <>
         <div className="grid gap-4 lg:grid-cols-[1.3fr_1fr]">
           <section className="border border-border bg-card">
             <div className="flex items-start justify-between border-b border-border px-5 py-4">
@@ -62,10 +79,11 @@ export default async function ShiftPage() {
               </div>
               <span className="stamp border-signal/40 text-signal">Terbuka</span>
             </div>
-            <dl className="grid grid-cols-2 gap-px bg-border sm:grid-cols-4">
+            <dl className="grid grid-cols-2 gap-px bg-border sm:grid-cols-5">
               <Stat label="Kas awal" value={formatMoney(current.openingFloat, settings.currency)} />
               <Stat label="Penjualan bersih" value={formatMoney(summary.netSales, settings.currency)} />
               <Stat label="Tunai masuk" value={formatMoney(summary.cashIn, settings.currency)} />
+              <Stat label="Pengeluaran" value={formatMoney(summary.expenseTotal, settings.currency)} />
               <Stat label="Transaksi" value={String(summary.orderCount)} />
             </dl>
             {summary.cashRefundOut > 0 ? (
@@ -75,6 +93,15 @@ export default async function ShiftPage() {
                   −{formatMoney(summary.cashRefundOut, settings.currency)}
                 </span>{" "}
                 dari {formatMoney(summary.refundTotal, settings.currency)} refund.
+              </p>
+            ) : null}
+            {summary.expenseTotal > 0 ? (
+              <p className="border-t border-border px-5 py-2 text-[11px] text-muted-foreground">
+                Sudah dikurangi pengeluaran tunai sebesar{" "}
+                <span className="font-mono text-destructive">
+                  −{formatMoney(summary.expenseTotal, settings.currency)}
+                </span>
+                .
               </p>
             ) : null}
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-5 py-4">
@@ -100,6 +127,41 @@ export default async function ShiftPage() {
             />
           </section>
         </div>
+
+        <section className="border border-border bg-card p-5">
+          <SectionLabel>Kas keluar</SectionLabel>
+          <h2 className="mb-1 font-serif text-2xl leading-none">Catat pengeluaran</h2>
+          <p className="mb-4 text-xs text-muted-foreground">
+            Uang tunai yang keluar dari laci shift ini. Masuk ke kolom Kas seharusnya dan laporan.
+          </p>
+          <div className="grid gap-5 lg:grid-cols-2">
+            <ExpenseForm currency={settings.currency} />
+            <div>
+              {shiftExpenses.length > 0 ? (
+                <ul className="divide-y divide-border/70 border border-border/70">
+                  {shiftExpenses.map((row) => (
+                    <li key={row.id} className="flex items-center justify-between gap-3 px-3 py-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm">{row.note}</p>
+                        <p className="text-[11px] text-muted-foreground">
+                          {formatDateTime(row.createdAt)} · {row.by}
+                        </p>
+                      </div>
+                      <p className="font-mono text-sm text-destructive">
+                        −{formatMoney(Number(row.amount), settings.currency)}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="border border-dashed border-border px-3 py-6 text-center text-sm text-muted-foreground">
+                  Belum ada pengeluaran di shift ini.
+                </p>
+              )}
+            </div>
+          </div>
+        </section>
+        </>
       ) : (
         <div className="grid gap-4 lg:grid-cols-[1fr_1.1fr]">
           <section className="border border-border bg-card px-5 py-5">

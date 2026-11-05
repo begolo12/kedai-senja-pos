@@ -1,6 +1,6 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "./db";
-import { orderPayments, orders, shifts } from "./db/schema";
+import { expenses, orderPayments, orders, shifts } from "./db/schema";
 
 export async function getOpenShift(userId: number, storeId: number) {
   const found = await db
@@ -24,10 +24,11 @@ export type ShiftSummary = {
   cashIn: number;
   refundTotal: number;
   cashRefundOut: number;
+  expenseTotal: number;
 };
 
 /**
- * Kas tunai shift = kas awal + tunai masuk − refund tunai keluar.
+ * Kas tunai shift = kas awal + tunai masuk − refund tunai keluar − pengeluaran.
  * Refund tunai dihitung proporsional porsi tunai pesanan, jadi refund penuh
  * mengembalikan seluruh porsi tunai dan refund parsial hanya bagiannya.
  */
@@ -35,7 +36,7 @@ export async function getShiftSummary(
   shiftId: number,
   storeId: number,
 ): Promise<ShiftSummary> {
-  const [shiftOrders, paymentRows] = await Promise.all([
+  const [shiftOrders, paymentRows, expenseRows] = await Promise.all([
     db
       .select({ id: orders.id, total: orders.total, refundedTotal: orders.refundedTotal })
       .from(orders)
@@ -56,6 +57,10 @@ export async function getShiftSummary(
       .from(orderPayments)
       .innerJoin(orders, eq(orderPayments.orderId, orders.id))
       .where(and(eq(orders.shiftId, shiftId), eq(orders.storeId, storeId))),
+    db
+      .select({ amount: expenses.amount })
+      .from(expenses)
+      .where(and(eq(expenses.shiftId, shiftId), eq(expenses.storeId, storeId))),
   ]);
 
   const cashByOrder = new Map<number, number>();
@@ -85,5 +90,6 @@ export async function getShiftSummary(
     cashIn,
     refundTotal,
     cashRefundOut,
+    expenseTotal: expenseRows.reduce((sum, row) => sum + Number(row.amount), 0),
   };
 }

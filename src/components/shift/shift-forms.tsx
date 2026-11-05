@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { closeShiftAction, openShiftAction } from "@/lib/actions/shifts";
+import { closeShiftAction, createExpenseAction, openShiftAction } from "@/lib/actions/shifts";
 import { formatMoney, formatNumber, parseMoneyInput } from "@/lib/money";
 
 export function OpenShiftForm({ currency }: { currency: string }) {
@@ -148,6 +148,70 @@ export function CloseShiftForm({
 
       <Button type="submit" variant="outline" disabled={pending} className="w-full">
         {pending ? <Loader2 className="animate-spin" /> : null} Tutup shift
+      </Button>
+    </form>
+  );
+}
+export function ExpenseForm({ currency }: { currency: string }) {
+  const router = useRouter();
+  const [value, setValue] = useState("");
+  const [note, setNote] = useState("");
+  const [pending, startTransition] = useTransition();
+  const amount = parseMoneyInput(value);
+  const valid = amount > 0 && note.trim().length >= 2;
+
+  return (
+    <form
+      className="space-y-3"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (!valid) return;
+        startTransition(async () => {
+          const result = await createExpenseAction({ amount, note: note.trim() });
+          if (!result.ok) {
+            toast.error(result.error);
+            return;
+          }
+          toast.success("Pengeluaran tercatat.");
+          setValue("");
+          setNote("");
+          router.refresh();
+        });
+      }}
+    >
+      <div className="grid gap-3 sm:grid-cols-[140px_1fr]">
+        <div className="space-y-1.5">
+          <Label htmlFor="expense-amount" className="text-[11px] tracking-[0.14em] text-muted-foreground uppercase">
+            Nominal
+          </Label>
+          <Input
+            id="expense-amount"
+            value={formatNumber(amount / 100)}
+            onChange={(event) => setValue(event.target.value.replace(/[^\d]/g, ""))}
+            inputMode="numeric"
+            placeholder="0"
+            className="h-10 rounded-none font-mono"
+          />
+          {amount > 0 ? (
+            <p className="font-mono text-xs text-muted-foreground">{formatMoney(amount, currency)}</p>
+          ) : null}
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="expense-note" className="text-[11px] tracking-[0.14em] text-muted-foreground uppercase">
+            Keterangan
+          </Label>
+          <Input
+            id="expense-note"
+            value={note}
+            onChange={(event) => setNote(event.target.value)}
+            maxLength={120}
+            placeholder="mis. beli gas 3 kg"
+            className="h-10 rounded-none"
+          />
+        </div>
+      </div>
+      <Button type="submit" variant="outline" size="sm" disabled={pending || !valid}>
+        {pending ? <Loader2 className="animate-spin" /> : null} Catat pengeluaran
       </Button>
     </form>
   );

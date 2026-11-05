@@ -183,6 +183,15 @@ export const shiftCloseSchema = z.object({
   note: z.string().trim().max(200).optional().or(z.literal("")),
 });
 
+export const expenseSchema = z.object({
+  amount: z
+    .number()
+    .int()
+    .min(1, "Nominal minimal Rp 1.")
+    .max(1_000_000_000, "Nominal terlalu besar."),
+  note: z.string().trim().min(2, "Keterangan minimal 2 karakter.").max(120),
+});
+
 export const settingsSchema = z.object({
   storeName: z.string().trim().min(2).max(80),
   address: z.string().trim().max(200),
