@@ -213,106 +213,10 @@ async function pushOrder(
 
   const settings = await getSettings(storeId);
 
-  // Voucher dan poin divalidasi ulang dari DB — angka klien hanya petunjuk.
-  const code = input.voucherCode?.trim().toUpperCase() ?? "";
-  let voucherRow: typeof vouchers.$inferSelect | null = null;
-  let voucherAmount = 0;
-  if (code) {
-    const found = await db
-      .select()
-      .from(vouchers)
-      .where(and(eq(vouchers.storeId, storeId), eq(vouchers.code, code)))
-      .limit(1);
-    const v = found[0] ?? null;
-    const now = Date.now();
-    if (
-      !v ||
-      !v.active ||
-      (v.startsAt && v.startsAt.getTime() > now) ||
-      (v.endsAt && v.endsAt.getTime() < now) ||
-      (v.usageLimit > 0 && v.usedCount >= v.usageLimit) ||
-      input.subtotal < v.minSubtotal
-    ) {
-      return { clientId: input.clientId, status: "rejected", error: `Voucher ${code} tidak valid.` };
-    }
-    voucherRow = v;
-    voucherAmount = Math.min(
-      input.subtotal,
-      v.type === "percent"
-        ? Math.round((input.subtotal * Math.min(100, Math.max(0, v.value))) / 100)
-        : Math.max(0, Math.round(v.value)),
-    );
-  }
-
-  // Pelanggan buatan offline: sambungkan lewat hasil unggahan newCustomers.
-  const customerId: number | null =
-    input.customerId ??
-    (input.customerClientId ? customerMap.get(input.customerClientId) ?? null : null);
-  let customerPoints = 0;
-  let customerSpent = 0;
-  if (customerId) {
-    const found = await db
-      .select({ id: customers.id, points: customers.points, totalSpent: customers.totalSpent })
-      .from(customers)
-      .where(and(eq(customers.id, customerId), eq(customers.storeId, storeId)))
-      .limit(1);
-    if (!found[0]) {
-      return { clientId: input.clientId, status: "rejected", error: "Pelanggan tidak ditemukan." };
-    }
-    customerPoints = found[0].points;
-    customerSpent = found[0].totalSpent;
-  }
-  let pointsRedeemed = 0;
-  let redeemAmount = 0;
-  if (input.pointsRedeem > 0) {
-    if (!customerId || settings.pointsValue <= 0 || input.pointsRedeem > customerPoints) {
-      return { clientId: input.clientId, status: "rejected", error: "Tukar poin tidak valid." };
-    }
-    pointsRedeemed = input.pointsRedeem;
-    redeemAmount = Math.min(
-      Math.max(0, input.subtotal - voucherAmount),
-      pointsRedeemed * settings.pointsValue,
-    );
-  }
-
-  const expected = computeTotals(
-    input.items.map((item) => ({ unitPrice: item.unitPrice, qty: item.qty })),
-    {
-      discountType: input.discountType,
-      discountValue: input.discountValue,
-      fixedDiscount: voucherAmount + redeemAmount,
-      taxRate: input.taxRate,
-    },
-  );
-  if (
-    expected.subtotal !== input.subtotal ||
-    expected.discountAmount !== input.discountAmount ||
-    expected.taxAmount !== input.taxAmount ||
-    expected.total !== input.total
-  ) {
-    return {
-      clientId: input.clientId,
-      status: "rejected",
-      error: "Total tidak cocok dengan perhitungan server.",
-    };
-  }
-  if (input.paymentMethod === "cash") {
-    if (input.amountPaid < input.total || input.changeDue !== input.amountPaid - input.total) {
-      return { clientId: input.clientId, status: "rejected", error: "Pembayaran tunai tidak valid." };
-    }
-  } else if (input.amountPaid !== input.total || input.changeDue !== 0) {
-    return { clientId: input.clientId, status: "rejected", error: "Pembayaran non-tunai tidak valid." };
-  }
-
+  // Seluruh validasi harga, stok, voucher, dan poin dijalankan dalam transaksi
+  // dengan FOR UPDATE untuk mencegah manipulasi klien dan race condition.
   const created = await db.transaction(async (tx) => {
-    // Semua query lewat koneksi transaksi — pool baru di dalam transaksi
-    // menyumbat backend single-connection (PGlite lokal).
-    const multiplier =
-      (await resolveTier(storeId, customerSpent, tx))?.pointsMultiplier ?? 100;
-    const pointsEarned =
-      customerId && settings.pointsPerAmount
-        ? pointsWithMultiplier(Math.floor(input.total / settings.pointsPerAmount), multiplier)
-        : 0;
+    // 1. Idempotensi ulang di dalam tx
     const again = await tx
       .select({ id: orders.id, number: orders.number })
       .from(orders)
@@ -322,8 +226,155 @@ async function pushOrder(
       return { status: "exists" as const, id: again[0].id, number: again[0].number };
     }
 
+    // 2. Lock & validasi produk: harga dan modal WAJIB cocok dengan DB
+    const saleLines: { product: typeof products.$inferSelect; qty: number }[] = [];
+    const itemRecords: {
+      productId: number;
+      name: string;
+      sku: string;
+      unitPrice: number;
+      cost: number;
+      qty: number;
+      note?: string;
+      lineTotal: number;
+    }[] = [];
+
+    for (const item of input.items) {
+      const found = await tx
+        .select()
+        .from(products)
+        .where(and(eq(products.id, item.productId), eq(products.storeId, storeId)))
+        .for("update");
+      const prod = found[0];
+      if (!prod || !prod.active) {
+        throw new Error(`Produk ${item.name} tidak aktif atau tidak ditemukan.`);
+      }
+      if (prod.price !== item.unitPrice) {
+        throw new Error(`Harga ${prod.name} tidak cocok dengan sistem.`);
+      }
+      saleLines.push({ product: prod, qty: item.qty });
+      itemRecords.push({
+        productId: prod.id,
+        name: prod.name,
+        sku: prod.sku,
+        unitPrice: prod.price,
+        cost: prod.cost,
+        qty: item.qty,
+        note: item.note,
+        lineTotal: prod.price * item.qty,
+      });
+    }
+
+    const subtotal = itemRecords.reduce((sum, item) => sum + item.lineTotal, 0);
+    const rawManual =
+      input.discountType === "percent"
+        ? Math.round((subtotal * Math.min(100, Math.max(0, input.discountValue))) / 100)
+        : input.discountType === "amount"
+          ? Math.max(0, Math.round(input.discountValue))
+          : 0;
+    const manualDiscount = Math.min(subtotal, rawManual);
+
+    // 3. Lock & validasi voucher di dalam transaksi
+    const code = input.voucherCode?.trim().toUpperCase() ?? "";
+    let voucherRow: typeof vouchers.$inferSelect | null = null;
+    let voucherAmount = 0;
+    if (code) {
+      const found = await tx
+        .select()
+        .from(vouchers)
+        .where(and(eq(vouchers.storeId, storeId), eq(vouchers.code, code)))
+        .for("update")
+        .limit(1);
+      const v = found[0] ?? null;
+      const now = Date.now();
+      if (
+        !v ||
+        !v.active ||
+        (v.startsAt && v.startsAt.getTime() > now) ||
+        (v.endsAt && v.endsAt.getTime() < now) ||
+        (v.usageLimit > 0 && v.usedCount >= v.usageLimit) ||
+        subtotal < v.minSubtotal
+      ) {
+        throw new Error(`Voucher ${code} tidak valid atau sudah habis.`);
+      }
+      voucherRow = v;
+      const raw =
+        v.type === "percent"
+          ? Math.round((subtotal * Math.min(100, Math.max(0, v.value))) / 100)
+          : Math.max(0, Math.round(v.value));
+      voucherAmount = Math.min(subtotal - manualDiscount, raw);
+    }
+
+    // 4. Lock & validasi pelanggan di dalam transaksi
+    const customerId: number | null =
+      input.customerId ??
+      (input.customerClientId ? customerMap.get(input.customerClientId) ?? null : null);
+    let customerPoints = 0;
+    let customerSpent = 0;
+    if (customerId) {
+      const found = await tx
+        .select({ id: customers.id, points: customers.points, totalSpent: customers.totalSpent })
+        .from(customers)
+        .where(and(eq(customers.id, customerId), eq(customers.storeId, storeId)))
+        .for("update")
+        .limit(1);
+      if (!found[0]) {
+        throw new Error("Pelanggan tidak ditemukan.");
+      }
+      customerPoints = found[0].points;
+      customerSpent = found[0].totalSpent;
+    }
+
+    let pointsRedeemed = 0;
+    let redeemAmount = 0;
+    if (input.pointsRedeem > 0) {
+      if (!customerId || settings.pointsValue <= 0 || input.pointsRedeem > customerPoints) {
+        throw new Error("Tukar poin tidak valid.");
+      }
+      pointsRedeemed = input.pointsRedeem;
+      redeemAmount = Math.min(
+        Math.max(0, subtotal - manualDiscount - voucherAmount),
+        pointsRedeemed * settings.pointsValue,
+      );
+    }
+
+    // 5. Verifikasi total dengan taxRate server (settings.taxRate), BUKAN input.taxRate
+    const expected = computeTotals(
+      itemRecords.map((item) => ({ unitPrice: item.unitPrice, qty: item.qty })),
+      {
+        discountType: input.discountType,
+        discountValue: input.discountValue,
+        fixedDiscount: voucherAmount + redeemAmount,
+        taxRate: settings.taxRate,
+      },
+    );
+
+    if (
+      expected.subtotal !== input.subtotal ||
+      expected.discountAmount !== input.discountAmount ||
+      expected.taxAmount !== input.taxAmount ||
+      expected.total !== input.total
+    ) {
+      throw new Error("Total tagihan tidak cocok dengan perhitungan server.");
+    }
+
+    if (input.paymentMethod === "cash") {
+      if (input.amountPaid < input.total || input.changeDue !== input.amountPaid - input.total) {
+        throw new Error("Pembayaran tunai tidak valid.");
+      }
+    } else if (input.amountPaid !== input.total || input.changeDue !== 0) {
+      throw new Error("Pembayaran non-tunai tidak valid.");
+    }
+
+    const multiplier =
+      (await resolveTier(storeId, customerSpent, tx))?.pointsMultiplier ?? 100;
+    const pointsEarned =
+      customerId && settings.pointsPerAmount
+        ? pointsWithMultiplier(Math.floor(input.total / settings.pointsPerAmount), multiplier)
+        : 0;
+
     await tx.execute(sql`select pg_advisory_xact_lock(771122)`);
-    const shiftRows = await tx
+    let shiftRows = await tx
       .select({ id: shifts.id })
       .from(shifts)
       .where(
@@ -334,6 +385,16 @@ async function pushOrder(
         ),
       )
       .limit(1);
+
+    // Mobile tidak punya layar shift: tanpa shift otomatis, order tunai
+    // offline tersimpan tanpa shift dan tidak pernah masuk rekonsiliasi
+    // laci. Shift dibuka dengan kas awal 0 dan ditutup dari web.
+    if (!shiftRows[0]) {
+      shiftRows = await tx
+        .insert(shifts)
+        .values({ storeId, userId, openingFloat: 0 })
+        .returning({ id: shifts.id });
+    }
 
     const now = new Date();
     const deviceTime = new Date(input.createdAt);
@@ -354,20 +415,6 @@ async function pushOrder(
         )
     )[0]?.n;
 
-    const knownProducts = new Set<number>();
-    const saleLines: { product: typeof products.$inferSelect; qty: number }[] = [];
-    for (const item of input.items) {
-      const found = await tx
-        .select()
-        .from(products)
-        .where(and(eq(products.id, item.productId), eq(products.storeId, storeId)))
-        .for("update");
-      if (found[0]) {
-        knownProducts.add(item.productId);
-        saleLines.push({ product: found[0], qty: item.qty });
-      }
-    }
-
     const [order] = await tx
       .insert(orders)
       .values({
@@ -377,13 +424,13 @@ async function pushOrder(
         shiftId: shiftRows[0]?.id ?? null,
         userId,
         customerId,
-        subtotal: input.subtotal,
+        subtotal: expected.subtotal,
         discountType: input.discountType,
         discountValue: input.discountValue,
-        discountAmount: input.discountAmount,
-        taxAmount: input.taxAmount,
-        total: input.total,
-        costTotal: input.costTotal,
+        discountAmount: expected.discountAmount,
+        taxAmount: expected.taxAmount,
+        total: expected.total,
+        costTotal: itemRecords.reduce((sum, item) => sum + item.cost * item.qty, 0),
         pointsEarned,
         pointsRedeemed,
         redeemAmount,
@@ -399,28 +446,26 @@ async function pushOrder(
       })
       .returning({ id: orders.id, number: orders.number });
 
-    // Baris pembayaran menyimpan nilai bersih: sama dengan total.
     await tx.insert(orderPayments).values({
       orderId: order.id,
       method: input.paymentMethod,
-      amount: input.total,
+      amount: expected.total,
     });
 
     await tx.insert(orderItems).values(
-      input.items.map((item) => ({
+      itemRecords.map((item) => ({
         orderId: order.id,
-        productId: knownProducts.has(item.productId) ? item.productId : null,
+        productId: item.productId,
         name: item.name,
         sku: item.sku,
         unitPrice: item.unitPrice,
         cost: item.cost,
         qty: item.qty,
         note: item.note || null,
-        lineTotal: item.unitPrice * item.qty,
+        lineTotal: item.lineTotal,
       })),
     );
 
-    // Potong stok lewat resep (bahan) bila produk punya resep.
     const deducted = await deductForSale(tx, {
       storeId,
       userId,
@@ -443,7 +488,7 @@ async function pushOrder(
         .update(customers)
         .set({
           points: sql`${customers.points} + ${pointsEarned} - ${pointsRedeemed}`,
-          totalSpent: sql`${customers.totalSpent} + ${input.total}`,
+          totalSpent: sql`${customers.totalSpent} + ${expected.total}`,
         })
         .where(eq(customers.id, customerId));
     }

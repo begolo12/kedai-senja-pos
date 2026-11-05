@@ -86,3 +86,11 @@ test("csv escapes delimiters, quotes, and newlines", () => {
     'name,note\n"Kopi, susu","kata ""kunci"""\nTeh,"baris\nbaru"',
   );
 });
+
+test("csv neutralises formula injection", () => {
+  const out = toCsv(["name", "val"], [["=SUM(A1:A2)", "@danger"], ["+cmd", "-calc"]]);
+  assert.match(out, /'=SUM/);
+  assert.match(out, /'@danger/);
+  assert.match(out, /'\+cmd/);
+  assert.match(out, /'\-calc/);
+});

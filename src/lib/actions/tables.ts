@@ -187,9 +187,11 @@ export async function settleOrderAction(
       return { ok: false as const, error: "Tagihan ini sudah diselesaikan." };
     }
 
-    const cashTotal = list
-      .filter((p) => p.method === "cash")
-      .reduce((sum, p) => sum + p.amount, 0);
+    const cashList = list.filter((p) => p.method === "cash");
+    if (cashList.length > 1) {
+      return { ok: false as const, error: "Metode tunai hanya boleh satu baris." };
+    }
+    const cashTotal = cashList.reduce((sum, p) => sum + p.amount, 0);
     const nonCashTotal = list
       .filter((p) => p.method !== "cash")
       .reduce((sum, p) => sum + p.amount, 0);
@@ -215,6 +217,15 @@ export async function settleOrderAction(
         )
         .limit(1)
     )[0];
+
+    // Tunai harus masuk ke shift terbuka, sama seperti aturan kasir POS —
+    // kalau tidak, uang laci tidak pernah muncul di rekonsiliasi shift.
+    if (cashTotal > 0 && !shift) {
+      return {
+        ok: false as const,
+        error: "Buka shift dulu untuk menerima pembayaran tunai.",
+      };
+    }
 
     let pointsEarned = 0;
     if (customerId) {
@@ -245,6 +256,7 @@ export async function settleOrderAction(
       .set({
         status: "completed",
         settledAt: new Date(),
+        userId: order.userId ?? user.id,
         shiftId: shift?.id ?? order.shiftId,
         paymentMethod,
         amountPaid: cashTotal + nonCashTotal,

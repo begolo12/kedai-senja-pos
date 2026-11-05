@@ -232,9 +232,11 @@ export async function checkoutAction(input: unknown): Promise<CheckoutResult> {
 
     // Split payment: tunai boleh lebih untuk kembalian; non-tunai harus pas.
     const payments = toPayments(data, data.paymentMethod, totals.total);
-    const cashTotal = payments
-      .filter((p) => p.method === "cash")
-      .reduce((sum, p) => sum + p.amount, 0);
+    const cashList = payments.filter((p) => p.method === "cash");
+    if (cashList.length > 1) {
+      return { ok: false as const, error: "Metode tunai hanya boleh satu baris." };
+    }
+    const cashTotal = cashList.reduce((sum, p) => sum + p.amount, 0);
     const nonCashTotal = payments
       .filter((p) => p.method !== "cash")
       .reduce((sum, p) => sum + p.amount, 0);
