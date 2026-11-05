@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Printer, UserRound } from "lucide-react";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { customers, orderItems, orders, shifts, users } from "@/lib/db/schema";
 import { requireAdmin } from "@/lib/auth";
@@ -20,13 +20,13 @@ export default async function OrderDetailPage({ params }: PageProps<"/orders/[id
   const row = (await db
     .select({
       order: orders,
-      cashier: users.name,
+      cashier: sql<string>`coalesce(${users.name}, 'Self-order')`, 
       customerName: customers.name,
       customerPhone: customers.phone,
       shiftId: shifts.id,
     })
     .from(orders)
-    .innerJoin(users, eq(orders.userId, users.id))
+    .leftJoin(users, eq(orders.userId, users.id))
     .leftJoin(customers, eq(orders.customerId, customers.id))
     .leftJoin(shifts, eq(orders.shiftId, shifts.id))
     .where(and(eq(orders.id, orderId), eq(orders.storeId, store.id)))

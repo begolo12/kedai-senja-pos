@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Check, MessageCircle, RotateCcw } from "lucide-react";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { customers, orderItems, orderPayments, orders, users } from "@/lib/db/schema";
 import { requireStore } from "@/lib/auth";
@@ -22,17 +22,17 @@ export default async function ReceiptPage({ params, searchParams }: PageProps<"/
   const order = (await db
     .select({
       order: orders,
-      cashier: users.name,
+      cashier: sql<string>`coalesce(${users.name}, 'Self-order')`, 
       customerName: customers.name,
       customerPhone: customers.phone,
     })
     .from(orders)
-    .innerJoin(users, eq(orders.userId, users.id))
+    .leftJoin(users, eq(orders.userId, users.id))
     .leftJoin(customers, eq(orders.customerId, customers.id))
     .where(and(eq(orders.id, orderId), eq(orders.storeId, store.id)))
     )[0];
   if (!order) notFound();
-  if (user.role !== "admin" && order.order.userId !== user.id) notFound();
+  if (user.role !== "admin" && order.order.userId !== null && order.order.userId !== user.id) notFound();
 
   const items = await db.select().from(orderItems).where(eq(orderItems.orderId, orderId));
   const payments = await db

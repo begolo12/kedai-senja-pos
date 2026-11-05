@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, lt, ne } from "drizzle-orm";
+import { and, asc, eq, gte, lt, ne, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { customers, orderItems, orders, users } from "@/lib/db/schema";
 import { getStoreContext } from "@/lib/auth";
@@ -25,7 +25,7 @@ export async function GET(request: Request) {
     .select({
       number: orders.number,
       createdAt: orders.createdAt,
-      cashier: users.name,
+      cashier: sql<string>`coalesce(${users.name}, 'Self-order')`, 
       customer: customers.name,
       method: orders.paymentMethod,
       status: orders.status,
@@ -36,7 +36,7 @@ export async function GET(request: Request) {
       cost: orders.costTotal,
     })
     .from(orders)
-    .innerJoin(users, eq(orders.userId, users.id))
+    .leftJoin(users, eq(orders.userId, users.id))
     .leftJoin(customers, eq(orders.customerId, customers.id))
     .where(
       and(

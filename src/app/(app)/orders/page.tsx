@@ -55,11 +55,11 @@ export default async function OrdersPage({ searchParams }: PageProps<"/orders">)
       status: orders.status,
       method: orders.paymentMethod,
       createdAt: orders.createdAt,
-      cashier: users.name,
+      cashier: sql<string>`coalesce(${users.name}, 'Self-order')`, 
       customer: customers.name,
     })
     .from(orders)
-    .innerJoin(users, eq(orders.userId, users.id))
+    .leftJoin(users, eq(orders.userId, users.id))
     .leftJoin(customers, eq(orders.customerId, customers.id))
     .where(and(...filters))
     .orderBy(desc(orders.createdAt))
