@@ -18,37 +18,42 @@ export async function OPTIONS(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const header = request.headers.get("authorization") ?? "";
-  const pending = readPendingToken(
-    header.startsWith("Bearer ") ? header.slice(7) : undefined,
-  );
-  if (!pending) return json(request, { error: "Sesi login berakhir." }, 401);
+  try {
+    const header = request.headers.get("authorization") ?? "";
+    const pending = readPendingToken(
+      header.startsWith("Bearer ") ? header.slice(7) : undefined,
+    );
+    if (!pending) return json(request, { error: "Sesi login berakhir." }, 401);
 
-  const parsed = schema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return json(request, { error: "Toko tidak valid." }, 400);
+    const parsed = schema.safeParse(await request.json().catch(() => null));
+    if (!parsed.success) return json(request, { error: "Toko tidak valid." }, 400);
 
-  const found = await db
-    .select()
-    .from(users)
-    .where(eq(users.id, pending.userId))
-    .limit(1);
-  const user = found[0];
-  if (!user || !user.active) return json(request, { error: "Akun tidak aktif." }, 401);
-  if (!(await userCanUseStore(user, parsed.data.storeId))) {
-    return json(request, { error: "Toko tidak tersedia untuk akun ini." }, 403);
+    const found = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, pending.userId))
+      .limit(1);
+    const user = found[0];
+    if (!user || !user.active) return json(request, { error: "Akun tidak aktif." }, 401);
+    if (!(await userCanUseStore(user, parsed.data.storeId))) {
+      return json(request, { error: "Toko tidak tersedia untuk akun ini." }, 403);
+    }
+
+    const storeRows = await db
+      .select()
+      .from(stores)
+      .where(and(eq(stores.id, parsed.data.storeId), eq(stores.active, true)))
+      .limit(1);
+    const store = storeRows[0];
+    if (!store) return json(request, { error: "Toko tidak aktif." }, 404);
+
+    return json(request, {
+      token: createApiToken(user.id, store.id),
+      user: mobileUser(user),
+      store: mobileStore(store),
+    });
+  } catch (error) {
+    console.error("Mobile select-store error:", error);
+    return json(request, { error: "Terjadi kesalahan di server." }, 500);
   }
-
-  const storeRows = await db
-    .select()
-    .from(stores)
-    .where(and(eq(stores.id, parsed.data.storeId), eq(stores.active, true)))
-    .limit(1);
-  const store = storeRows[0];
-  if (!store) return json(request, { error: "Toko tidak aktif." }, 404);
-
-  return json(request, {
-    token: createApiToken(user.id, store.id),
-    user: mobileUser(user),
-    store: mobileStore(store),
-  });
 }

@@ -517,53 +517,63 @@ export async function OPTIONS(request: Request) {
 }
 
 export async function GET(request: Request) {
-  const context = await getMobileContext(request);
-  if (!context) return json(request, { error: "Unauthorized" }, 401);
-  return json(request, {
-    user: mobileUser(context.user),
-    store: mobileStore(context.store),
-    ...(await pullSnapshot(context.store.id)),
-  });
+  try {
+    const context = await getMobileContext(request);
+    if (!context) return json(request, { error: "Unauthorized" }, 401);
+    return json(request, {
+      user: mobileUser(context.user),
+      store: mobileStore(context.store),
+      ...(await pullSnapshot(context.store.id)),
+    });
+  } catch (error) {
+    console.error("Mobile sync GET error:", error);
+    return json(request, { error: "Terjadi kesalahan di server." }, 500);
+  }
 }
 
 export async function POST(request: Request) {
-  const context = await getMobileContext(request);
-  if (!context) return json(request, { error: "Unauthorized" }, 401);
+  try {
+    const context = await getMobileContext(request);
+    if (!context) return json(request, { error: "Unauthorized" }, 401);
 
-  const parsed = payloadSchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) {
-    return json(request, { error: "Payload sinkron tidak valid." }, 400);
-  }
-
-  const customerResults = await pushCustomers(
-    context.store.id,
-    parsed.data.newCustomers,
-  );
-
-  const results: SyncResult[] = [];
-  const customerMap = new Map<string, number>();
-  for (const entry of customerResults) {
-    if (entry.id) customerMap.set(entry.clientId, entry.id);
-  }
-  for (const order of parsed.data.orders) {
-    try {
-      results.push(
-        await pushOrder(context.user.id, context.store.id, order, customerMap),
-      );
-    } catch (error) {
-      results.push({
-        clientId: order.clientId,
-        status: "rejected",
-        error: error instanceof Error ? error.message.slice(0, 160) : "Gagal menyimpan.",
-      });
+    const parsed = payloadSchema.safeParse(await request.json().catch(() => null));
+    if (!parsed.success) {
+      return json(request, { error: "Payload sinkron tidak valid." }, 400);
     }
-  }
 
-  return json(request, {
-    user: mobileUser(context.user),
-    store: mobileStore(context.store),
-    results,
-    customerResults,
-    ...(await pullSnapshot(context.store.id)),
-  });
+    const customerResults = await pushCustomers(
+      context.store.id,
+      parsed.data.newCustomers,
+    );
+
+    const results: SyncResult[] = [];
+    const customerMap = new Map<string, number>();
+    for (const entry of customerResults) {
+      if (entry.id) customerMap.set(entry.clientId, entry.id);
+    }
+    for (const order of parsed.data.orders) {
+      try {
+        results.push(
+          await pushOrder(context.user.id, context.store.id, order, customerMap),
+        );
+      } catch (error) {
+        results.push({
+          clientId: order.clientId,
+          status: "rejected",
+          error: error instanceof Error ? error.message.slice(0, 160) : "Gagal menyimpan.",
+        });
+      }
+    }
+
+    return json(request, {
+      user: mobileUser(context.user),
+      store: mobileStore(context.store),
+      results,
+      customerResults,
+      ...(await pullSnapshot(context.store.id)),
+    });
+  } catch (error) {
+    console.error("Mobile sync POST error:", error);
+    return json(request, { error: "Terjadi kesalahan di server." }, 500);
+  }
 }

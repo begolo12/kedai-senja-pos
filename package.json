@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "concurrently -k -s first \"pnpm db:dev\" \"wait-on tcp:127.0.0.1:5433 && pnpm db:setup && next dev\"",
-    "build": "next build",
+    "build": "tsx scripts/migrate-prod.ts && next build",
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",

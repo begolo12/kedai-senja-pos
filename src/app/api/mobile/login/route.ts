@@ -25,32 +25,37 @@ export async function OPTIONS(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const parsed = schema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) {
-    return json(request, { error: "ID atau PIN tidak valid." }, 400);
-  }
-  const username = parsed.data.username.toLowerCase();
+  try {
+    const parsed = schema.safeParse(await request.json().catch(() => null));
+    if (!parsed.success) {
+      return json(request, { error: "ID atau PIN tidak valid." }, 400);
+    }
+    const username = parsed.data.username.toLowerCase();
 
-  if (mobileLoginBlocked(username)) {
-    return json(request, { error: "Terlalu banyak percobaan. Tunggu 5 menit." }, 429);
-  }
+    if (mobileLoginBlocked(username)) {
+      return json(request, { error: "Terlalu banyak percobaan. Tunggu 5 menit." }, 429);
+    }
 
-  const found = await db
-    .select()
-    .from(users)
-    .where(eq(users.username, username))
-    .limit(1);
-  const user = found[0];
-  if (!user || !user.active || !verifyPin(parsed.data.pin, user.pinHash)) {
-    mobileLoginFailed(username);
-    return json(request, { error: "ID atau PIN salah." }, 401);
-  }
+    const found = await db
+      .select()
+      .from(users)
+      .where(eq(users.username, username))
+      .limit(1);
+    const user = found[0];
+    if (!user || !user.active || !verifyPin(parsed.data.pin, user.pinHash)) {
+      mobileLoginFailed(username);
+      return json(request, { error: "ID atau PIN salah." }, 401);
+    }
 
-  mobileLoginOk(username);
-  const stores = await getAllowedStores(user);
-  return json(request, {
-    pendingToken: createPendingToken(user.id),
-    user: mobileUser(user),
-    stores: stores.map(mobileStore),
-  });
+    mobileLoginOk(username);
+    const stores = await getAllowedStores(user);
+    return json(request, {
+      pendingToken: createPendingToken(user.id),
+      user: mobileUser(user),
+      stores: stores.map(mobileStore),
+    });
+  } catch (error) {
+    console.error("Mobile login error:", error);
+    return json(request, { error: "Terjadi kesalahan di server." }, 500);
+  }
 }
