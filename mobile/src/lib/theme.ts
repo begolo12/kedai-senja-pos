@@ -33,7 +33,7 @@ export function applyTheme(mode: ThemeMode) {
   const effective = getEffectiveTheme(mode);
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) {
-    meta.setAttribute("content", effective === "dark" ? "#100d0b" : "#1c1a17");
+    meta.setAttribute("content", effective === "dark" ? "#12151a" : "#ffffff");
   }
 }
 

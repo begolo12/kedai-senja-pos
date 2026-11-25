@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref } from "react";
 import { QRCodeSVG } from "qrcode.react";
-import { ArrowRight, Pause, ScanLine, ShoppingBag, TicketPercent, X } from "lucide-react";
+import { ArrowRight, Pause, ScanLine, Search, ShoppingBag, TicketPercent, X } from "lucide-react";
 import { computeTotals, formatMoney, formatNumber, parseMoneyInput } from "../lib/money";
 import { computeModifierDelta, formatOptionChoice, parseOptions } from "../lib/modifiers";
 import { db } from "../lib/db";
@@ -352,6 +352,7 @@ export function PosScreen({
     <div className="pos">
       <section className="catalog">
         <form className="search" onSubmit={submitSearch}>
+          <Search size={17} className="search-icon" aria-hidden="true" />
           <input
             ref={searchRef}
             value={query}
@@ -400,7 +401,7 @@ export function PosScreen({
             return (
               <button
                 key={product.id}
-                className="product"
+                className={inCart > 0 ? "product selected" : "product"}
                 disabled={product.stock <= 0}
                 onClick={() => chooseProduct(product)}
               >
