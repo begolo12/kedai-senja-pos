@@ -53,7 +53,7 @@ export async function POST(request: Request) {
   const data = parsed.data;
 
   const found = await db
-    .select({ id: stores.id, taxRate: stores.taxRate })
+    .select({ id: stores.id, serviceChargeRate: stores.serviceChargeRate, taxRate: stores.taxRate })
     .from(stores)
     .where(and(eq(stores.code, data.storeCode.toLowerCase()), eq(stores.active, true)))
     .limit(1);
@@ -73,6 +73,7 @@ export async function POST(request: Request) {
         tableLabel: null,
         note: "Self-order pelanggan",
         items: data.items,
+        serviceChargeRate: store.serviceChargeRate,
         taxRate: store.taxRate,
       });
       if (!order.ok) return order;

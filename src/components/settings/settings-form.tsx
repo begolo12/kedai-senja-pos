@@ -16,6 +16,7 @@ export type SettingsValues = {
   address: string;
   phone: string;
   currency: string;
+  serviceChargeRate: number;
   taxRate: number;
   receiptFooter: string;
   receiptWidth: "58" | "80";
@@ -27,6 +28,7 @@ export type SettingsValues = {
 export function SettingsForm({ settings }: { settings: SettingsValues }) {
   const router = useRouter();
   const [values, setValues] = useState(settings);
+  const [serviceCharge, setServiceCharge] = useState(String(settings.serviceChargeRate / 100));
   const [tax, setTax] = useState(String(settings.taxRate / 100));
   const [points, setPoints] = useState(String(Math.round(settings.pointsPerAmount / 100)));
   const [pointsValue, setPointsValue] = useState(String(Math.round(settings.pointsValue / 100)));
@@ -46,6 +48,7 @@ export function SettingsForm({ settings }: { settings: SettingsValues }) {
         address: values.address,
         phone: values.phone,
         currency: "IDR",
+        serviceChargeRate: Math.round(Number(serviceCharge.replace(",", ".")) * 100) || 0,
         taxRate: Math.round(Number(tax.replace(",", ".")) * 100) || 0,
         receiptFooter: values.receiptFooter,
         receiptWidth: values.receiptWidth,
@@ -84,8 +87,21 @@ export function SettingsForm({ settings }: { settings: SettingsValues }) {
           <Textarea id="address" rows={2} value={values.address} onChange={(e) => set("address", e.target.value)} />
         </div>
         <div className="space-y-1.5">
+          <Label htmlFor="service-charge" className="text-[10px] tracking-[0.12em] text-muted-foreground uppercase">
+            Service Charge (%)
+          </Label>
+          <Input
+            id="service-charge"
+            value={serviceCharge}
+            onChange={(e) => setServiceCharge(e.target.value.replace(/[^\d.,]/g, ""))}
+            inputMode="decimal"
+            className="font-mono"
+          />
+          <p className="text-[11px] text-muted-foreground">0 untuk menonaktifkan service charge.</p>
+        </div>
+        <div className="space-y-1.5">
           <Label htmlFor="tax" className="text-[10px] tracking-[0.12em] text-muted-foreground uppercase">
-            Pajak (%)
+            Pajak / PB1 (%)
           </Label>
           <Input
             id="tax"

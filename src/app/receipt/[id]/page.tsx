@@ -70,6 +70,12 @@ export default async function ReceiptPage({ params, searchParams }: PageProps<"/
   }
   thermalLines.push({ kind: "rule" });
   thermalLines.push({ kind: "text", text: pair("Subtotal", formatMoney(order.order.subtotal, settings.currency), thermalWidth) });
+  if (order.order.serviceChargeAmount > 0) {
+    thermalLines.push({
+      kind: "text",
+      text: pair("Service", formatMoney(order.order.serviceChargeAmount, settings.currency), thermalWidth),
+    });
+  }
   if (payments.length > 1) {
     for (const payment of payments) {
       thermalLines.push({
@@ -219,6 +225,12 @@ export default async function ReceiptPage({ params, searchParams }: PageProps<"/
             <Line
               label={`Tukar ${order.order.pointsRedeemed} poin`}
               value={`−${formatMoney(order.order.redeemAmount, settings.currency)}`}
+            />
+          ) : null}
+          {order.order.serviceChargeAmount > 0 ? (
+            <Line
+              label={`Service ${(settings.serviceChargeRate / 100).toLocaleString("id-ID")}%`}
+              value={formatMoney(order.order.serviceChargeAmount, settings.currency)}
             />
           ) : null}
           <Line

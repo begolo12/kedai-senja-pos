@@ -4,7 +4,7 @@ import { LockKeyhole } from "lucide-react";
 import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { categories, customers, products, storeTables, vouchers } from "@/lib/db/schema";
-import { requireStore } from "@/lib/auth";
+import { requireCashierOrAdmin } from "@/lib/auth";
 import { getSettings } from "@/lib/settings";
 import { getOpenShift } from "@/lib/shifts";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,7 @@ import { PageHeader } from "@/components/shared/page-header";
 export const metadata: Metadata = { title: "Kasir" };
 
 export default async function PosPage() {
-  const { user, store } = await requireStore();
+  const { user, store } = await requireCashierOrAdmin();
   const settings = await getSettings(store.id);
   const shift = await getOpenShift(user.id, store.id);
 
@@ -104,6 +104,7 @@ export default async function PosPage() {
         categories={cats}
         customers={customerList}
         currency={settings.currency}
+        serviceChargeRate={settings.serviceChargeRate}
         taxRate={settings.taxRate}
         qrisPayload={settings.qrisPayload}
         pointsValue={settings.pointsValue}

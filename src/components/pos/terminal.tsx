@@ -39,6 +39,11 @@ import {
   parseMoneyInput,
   type DiscountType,
 } from "@/lib/money";
+import {
+  computeModifierDelta,
+  formatOptionChoice,
+  parseOptions,
+} from "@/lib/modifiers";
 import { checkoutAction } from "@/lib/actions/sales";
 import { createOpenOrderAction } from "@/lib/actions/tables";
 import { QRCodeSVG } from "qrcode.react";
@@ -102,6 +107,7 @@ export function PosTerminal({
   categories,
   customers,
   currency,
+  serviceChargeRate = 0,
   taxRate,
   qrisPayload,
   pointsValue,
@@ -112,6 +118,7 @@ export function PosTerminal({
   categories: Category[];
   customers: CustomerOption[];
   currency: string;
+  serviceChargeRate?: number;
   taxRate: number;
   qrisPayload: string;
   pointsValue: number;
@@ -132,7 +139,7 @@ export function PosTerminal({
   const [tableLabel, setTableLabel] = useState("");
   const [tableId, setTableId] = useState<number | null>(null);
   const [optionProduct, setOptionProduct] = useState<PosProduct | null>(null);
-  const [optionChoice, setOptionChoice] = useState("");
+  const [optionChoices, setOptionChoices] = useState<string[]>([]);
   const [optionNote, setOptionNote] = useState("");
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [method, setMethod] = useState<PayMode>("cash");
@@ -255,10 +262,12 @@ export function PosTerminal({
 
   const cart = lines.flatMap((line) => {
     const product = byId.get(line.productId);
-    return product ? [{ ...line, product }] : [];
+    if (!product) return [];
+    const unitPrice = product.price + computeModifierDelta(product.options, line.note);
+    return [{ ...line, product, unitPrice }];
   });
   const count = lines.reduce((sum, line) => sum + line.qty, 0);
-  const subtotal = cart.reduce((sum, line) => sum + line.product.price * line.qty, 0);
+  const subtotal = cart.reduce((sum, line) => sum + line.unitPrice * line.qty, 0);
   const rawManual =
     discountType === "percent"
       ? Math.round((subtotal * Math.min(100, Math.max(0, discountValue))) / 100)
@@ -285,11 +294,12 @@ export function PosTerminal({
   const redeemAmount = pointsRedeemed * pointsValue;
 
   const totals = computeTotals(
-    cart.map((line) => ({ unitPrice: line.product.price, qty: line.qty })),
+    cart.map((line) => ({ unitPrice: line.unitPrice, qty: line.qty })),
     {
       discountType,
       discountValue,
       fixedDiscount: voucherAmount + redeemAmount,
+      serviceChargeRate,
       taxRate,
     },
   );
@@ -330,24 +340,28 @@ export function PosTerminal({
   }
 
   function chooseProduct(product: PosProduct) {
-    const choices = (product.options ?? "")
-      .split(/[,;]/)
-      .map((choice) => choice.trim())
-      .filter(Boolean);
+    const choices = parseOptions(product.options);
     if (choices.length > 0) {
       setOptionProduct(product);
-      setOptionChoice(choices[0]);
+      setOptionChoices([choices[0].label]);
       setOptionNote("");
       return;
     }
     addLine(product);
   }
 
+  function toggleOptionChoice(label: string) {
+    setOptionChoices((prev) =>
+      prev.includes(label) ? prev.filter((item) => item !== label) : [...prev, label],
+    );
+  }
+
   function addWithOptions() {
     if (!optionProduct) return;
-    const note = [optionChoice, optionNote.trim()].filter(Boolean).join(" · ");
+    const note = [...optionChoices, optionNote.trim()].filter(Boolean).join(" · ");
     addLine(optionProduct, note);
     setOptionProduct(null);
+    setOptionChoices([]);
     setOptionNote("");
   }
 
@@ -655,7 +669,13 @@ export function PosTerminal({
   );
 
   return (
-    <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_390px]">
+    <div
+      data-hydrated={hydrated ? "true" : "false"}
+      className={cn(
+        "grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_390px]",
+        count > 0 && "pb-16 lg:pb-0",
+      )}
+    >
       <section className="min-w-0">
         <form onSubmit={submitSearch} className="relative">
           <Search className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -665,9 +685,22 @@ export function PosTerminal({
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Cari produk, SKU, atau pindai barcode…"
             aria-label="Cari produk"
-            className="h-12 border-border bg-card pr-24 pl-10 text-base shadow-none"
+            className="h-12 border-border bg-card pr-10 pl-10 text-base shadow-none sm:pr-24"
           />
-          <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 border border-border px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+          {query ? (
+            <button
+              type="button"
+              onClick={() => {
+                setQuery("");
+                searchRef.current?.focus();
+              }}
+              aria-label="Hapus pencarian"
+              className="absolute top-1/2 right-2.5 grid size-7 -translate-y-1/2 place-items-center text-muted-foreground hover:text-foreground sm:right-16"
+            >
+              <X className="size-4" />
+            </button>
+          ) : null}
+          <span className="pointer-events-none absolute top-1/2 right-3 hidden -translate-y-1/2 border border-border px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground sm:inline-block">
             / cari
           </span>
         </form>
@@ -695,6 +728,21 @@ export function PosTerminal({
             <p className="mt-1 text-sm text-muted-foreground">
               Coba kata kunci lain atau ganti kategori.
             </p>
+            {(query || category !== "all") ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-4"
+                onClick={() => {
+                  setQuery("");
+                  setCategory("all");
+                  searchRef.current?.focus();
+                }}
+              >
+                Reset filter
+              </Button>
+            ) : null}
           </div>
         ) : (
           <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
@@ -970,7 +1018,7 @@ export function PosTerminal({
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-[13px] font-medium">{line.product.name}</p>
                     <p className="font-mono text-[11px] text-muted-foreground">
-                      {formatMoney(line.product.price, currency)}
+                      {formatMoney(line.unitPrice, currency)}
                     </p>
                     {line.note ? (
                       <p className="mt-0.5 text-[11px] text-signal">{line.note}</p>
@@ -1012,7 +1060,7 @@ export function PosTerminal({
                     </div>
                   </div>
                   <p className="shrink-0 font-mono text-[13px] tabular">
-                    {formatMoney(line.product.price * line.qty, currency)}
+                    {formatMoney(line.unitPrice * line.qty, currency)}
                   </p>
                 </li>
               ))}
@@ -1183,6 +1231,12 @@ export function PosTerminal({
                 <dd className="font-mono tabular">−{formatMoney(redeemAmount, currency)}</dd>
               </div>
             ) : null}
+            {serviceChargeRate > 0 ? (
+              <div className="flex justify-between text-muted-foreground">
+                <dt>Service {(serviceChargeRate / 100).toLocaleString("id-ID")}%</dt>
+                <dd className="font-mono tabular">{formatMoney(totals.serviceChargeAmount, currency)}</dd>
+              </div>
+            ) : null}
             <div className="flex justify-between text-muted-foreground">
               <dt>Pajak {(taxRate / 100).toLocaleString("id-ID")}%</dt>
               <dd className="font-mono tabular">{formatMoney(totals.taxAmount, currency)}</dd>
@@ -1226,13 +1280,15 @@ export function PosTerminal({
         </div>
       </aside>
 
-      <a
-        href="#ticket"
-        className="fixed inset-x-3 bottom-3 z-20 flex items-center justify-between border border-foreground bg-foreground px-4 py-3 text-background shadow-lg lg:hidden"
-      >
-        <span className="text-xs tracking-[0.14em] uppercase">{count} item</span>
-        <span className="font-mono text-sm">{formatMoney(totals.total, currency)}</span>
-      </a>
+      {count > 0 ? (
+        <a
+          href="#ticket"
+          className="fixed inset-x-3 bottom-3 z-20 flex items-center justify-between border border-foreground bg-foreground px-4 py-3 text-background shadow-lg lg:hidden"
+        >
+          <span className="text-xs tracking-[0.14em] uppercase">{count} item · Lihat tiket</span>
+          <span className="font-mono text-sm tabular">{formatMoney(totals.total, currency)}</span>
+        </a>
+      ) : null}
 
       <Dialog open={paymentOpen} onOpenChange={setPaymentOpen}>
         <DialogContent className="sm:max-w-md">
@@ -1519,40 +1575,45 @@ export function PosTerminal({
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle className="font-serif text-2xl">{optionProduct?.name}</DialogTitle>
-            <DialogDescription>Pilih varian, tambah catatan bila perlu.</DialogDescription>
+            <DialogDescription>Pilih satu atau beberapa modifier, tambah catatan bila perlu.</DialogDescription>
           </DialogHeader>
           <div className="flex flex-wrap gap-1.5">
-            {(optionProduct?.options ?? "")
-              .split(/[,;]/)
-              .map((choice) => choice.trim())
-              .filter(Boolean)
-              .map((choice) => (
+            {parseOptions(optionProduct?.options).map((choice) => {
+              const selected = optionChoices.includes(choice.label);
+              return (
                 <button
-                  key={choice}
+                  key={choice.label}
                   type="button"
-                  onClick={() => setOptionChoice(choice)}
+                  onClick={() => toggleOptionChoice(choice.label)}
+                  aria-pressed={selected}
                   className={cn(
-                    "border px-2.5 py-1.5 text-xs",
-                    optionChoice === choice
+                    "border px-2.5 py-1.5 text-xs transition-colors",
+                    selected
                       ? "border-foreground bg-foreground text-background"
-                      : "border-border text-muted-foreground",
+                      : "border-border text-muted-foreground hover:border-foreground/40 hover:text-foreground",
                   )}
                 >
-                  {choice}
+                  {formatOptionChoice(choice, currency)}
                 </button>
-              ))}
+              );
+            })}
           </div>
           <Input
             value={optionNote}
             onChange={(event) => setOptionNote(event.target.value)}
-            placeholder="Catatan (mis. tanpa timun)"
+            placeholder="Catatan (mis. tanpa sedotan)"
             maxLength={100}
           />
           <Button
             onClick={addWithOptions}
             className="h-10 bg-signal text-signal-foreground hover:bg-signal/90"
           >
-            Tambahkan · {formatMoney(optionProduct?.price ?? 0, currency)}
+            Tambahkan ·{" "}
+            {formatMoney(
+              (optionProduct?.price ?? 0) +
+                computeModifierDelta(optionProduct?.options, optionChoices.join(" · ")),
+              currency,
+            )}
           </Button>
         </DialogContent>
       </Dialog>
@@ -1577,7 +1638,7 @@ function CategoryChip({
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        "flex h-7 items-center gap-1.5 border px-2.5 text-[11px] tracking-wide transition-colors",
+        "flex h-7 items-center gap-1.5 border px-2.5 text-[11px] tracking-wide transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
         active
           ? "border-foreground bg-foreground text-background"
           : "border-border bg-card text-muted-foreground hover:border-foreground/40 hover:text-foreground",

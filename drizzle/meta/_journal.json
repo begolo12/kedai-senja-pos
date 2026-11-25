@@ -43,6 +43,13 @@
       "when": 1793903827810,
       "tag": "0005_freezing_the_phantom",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1795638540674,
+      "tag": "0006_flashy_kingpin",
+      "breakpoints": true
     }
   ]
 }

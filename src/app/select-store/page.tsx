@@ -5,7 +5,7 @@ import { ArrowRight, MapPin, Store as StoreIcon } from "lucide-react";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
-import { getAllowedStores } from "@/lib/auth";
+import { defaultRouteForRole, getAllowedStores } from "@/lib/auth";
 import { readPending, readSession } from "@/lib/session";
 import { chooseStoreAction } from "@/lib/actions/stores";
 import { logoutAction } from "@/lib/actions/auth";
@@ -44,7 +44,12 @@ export default async function SelectStorePage({
             </p>
             <h1 className="mt-2 font-serif text-4xl leading-none">Pilih toko</h1>
             <p className="mt-2 text-sm text-sidebar-foreground/60">
-              {user.name} · {user.role === "admin" ? "Manajemen" : "Kasir"}
+              {user.name} ·{" "}
+              {user.role === "admin"
+                ? "Manajemen"
+                : user.role === "kitchen"
+                  ? "Barista / Dapur"
+                  : "Kasir"}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -137,7 +142,7 @@ export default async function SelectStorePage({
 
         {!pending ? (
           <Link
-            href={user.role === "admin" ? "/" : "/pos"}
+            href={defaultRouteForRole(user.role)}
             className="mt-6 inline-block text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
           >
             Kembali tanpa mengganti toko

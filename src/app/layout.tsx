@@ -20,13 +20,13 @@ const instrumentSerif = Instrument_Serif({
 });
 
 export const metadata: Metadata = {
-  title: { default: "Tera POS · Kasir & Laporan", template: "%s · Tera POS" },
+  title: { default: "Tera POS · Kasir & Kafe", template: "%s · Tera POS" },
   description:
-    "Kasir, stok, pesanan, shift, dan laporan untuk warung, kafe, dan toko Indonesia. Semua tertera.",
+    "Kasir, meja, dapur barista, stok, shift, dan laporan untuk kafe Indonesia. Semua tertera.",
 };
 
 export const viewport: Viewport = {
-  themeColor: "#f5f0e6",
+  themeColor: "#1c1815",
   width: "device-width",
   initialScale: 1,
 };

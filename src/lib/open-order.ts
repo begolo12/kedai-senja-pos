@@ -1,7 +1,8 @@
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "./db";
 import { orderItems, orders, products, storeTables } from "./db/schema";
-import { orderNumber } from "./money";
+import { orderNumber, computeTotals } from "./money";
+import { computeModifierDelta } from "./modifiers";
 import { dayStart } from "./dates";
 import { deductForSale } from "./recipes";
 
@@ -33,6 +34,7 @@ export async function createOpenOrderInTx(
     tableLabel: string | null;
     note: string | null;
     items: { productId: number; qty: number; note?: string }[];
+    serviceChargeRate?: number;
     taxRate: number;
   },
 ): Promise<OpenOrderResult> {
@@ -89,17 +91,24 @@ export async function createOpenOrderInTx(
     }
   }
 
-  const lines = rows.map(({ product, qty, note }) => ({
-    product: product!,
-    qty,
-    note,
-    lineTotal: product!.price * qty,
-  }));
-  const subtotal = lines.reduce((sum, line) => sum + line.lineTotal, 0);
-  // Pajak diterapkan saat tagihan dibuka agar konsisten dengan checkout
-  // langsung dan merge; diskon baru muncul saat settle/merge.
-  const taxAmount = Math.round((subtotal * input.taxRate) / 10000);
-  const total = subtotal + taxAmount;
+  const lines = rows.map(({ product, qty, note }) => {
+    const unitPrice = product!.price + computeModifierDelta(product!.options, note);
+    return {
+      product: product!,
+      qty,
+      note,
+      unitPrice,
+      lineTotal: unitPrice * qty,
+    };
+  });
+  const totals = computeTotals(
+    lines.map((line) => ({ unitPrice: line.unitPrice, qty: line.qty })),
+    {
+      serviceChargeRate: input.serviceChargeRate ?? 0,
+      taxRate: input.taxRate,
+    },
+  );
+  const { subtotal, serviceChargeAmount, taxAmount, total } = totals;
   const createdAt = new Date();
 
   await tx.execute(sql`select pg_advisory_xact_lock(771122)`);
@@ -125,6 +134,7 @@ export async function createOpenOrderInTx(
       userId: input.userId,
       tableId: input.tableId,
       subtotal,
+      serviceChargeAmount,
       taxAmount,
       total,
       costTotal: lines.reduce((sum, line) => sum + line.product.cost * line.qty, 0),
@@ -142,7 +152,7 @@ export async function createOpenOrderInTx(
       productId: line.product.id,
       name: line.product.name,
       sku: line.product.sku,
-      unitPrice: line.product.price,
+      unitPrice: line.unitPrice,
       cost: line.product.cost,
       qty: line.qty,
       note: line.note || null,

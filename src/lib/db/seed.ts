@@ -33,42 +33,41 @@ type SeedProduct = {
   options?: string;
 };
 
-const SEED_CATEGORIES = [
-  { name: "Ricebowl", color: "#a2542a", sortOrder: 1 },
-  { name: "Sushi", color: "#4f5b66", sortOrder: 2 },
-  { name: "Minuman Bubuk", color: "#6b7a4f", sortOrder: 3 },
-  { name: "Camilan", color: "#b07b3a", sortOrder: 4 },
-  { name: "Tambahan", color: "#7a5c8c", sortOrder: 5 },
+const SEED_CATEGORIES: {
+  name: string;
+  color: string;
+  station: "bar" | "kitchen";
+  sortOrder: number;
+}[] = [
+  { name: "Espresso", color: "#c47a3b", station: "bar", sortOrder: 1 },
+  { name: "Signature Coffee", color: "#a65d2e", station: "bar", sortOrder: 2 },
+  { name: "Non-Coffee", color: "#5b7d63", station: "bar", sortOrder: 3 },
+  { name: "Manual Brew", color: "#8a6d4b", station: "bar", sortOrder: 4 },
+  { name: "Pastry & Bakery", color: "#b5893d", station: "kitchen", sortOrder: 5 },
+  { name: "Kitchen & Brunch", color: "#5e6c7a", station: "kitchen", sortOrder: 6 },
 ];
 
 const SEED_PRODUCTS: SeedProduct[] = [
-  { sku: "RCB-GEPREK", barcode: "8990001000011", name: "Ricebowl Ayam Geprek", category: "Ricebowl", price: 1800000, cost: 850000, stock: 40, unit: "porsi", options: "Level 1,Level 2,Level 3,Level 4,Level 5" },
-  { sku: "RCB-TERI", barcode: "8990001000028", name: "Ricebowl Ayam Teriyaki", category: "Ricebowl", price: 2000000, cost: 950000, stock: 35, unit: "porsi", options: "Original,Extra saus" },
-  { sku: "RCB-BEEF", barcode: "8990001000035", name: "Ricebowl Beef Blackpepper", category: "Ricebowl", price: 2400000, cost: 1200000, stock: 30, unit: "porsi", options: "Tidak pedas,Pedas" },
-  { sku: "RCB-TELUR", barcode: "8990001000042", name: "Ricebowl Telur Sambal", category: "Ricebowl", price: 1400000, cost: 600000, stock: 35, unit: "porsi", options: "Level 1,Level 2,Level 3" },
-  { sku: "RCB-KATSU", barcode: "8990001000059", name: "Ricebowl Ayam Katsu", category: "Ricebowl", price: 2100000, cost: 1000000, stock: 25, unit: "porsi", options: "Saus teriyaki,Saus mentai" },
-  { sku: "RCB-DORI", barcode: "8990001000066", name: "Ricebowl Ikan Dori", category: "Ricebowl", price: 2300000, cost: 1100000, stock: 20, unit: "porsi", options: "Sambal matah,Saus tartar" },
-  { sku: "SSH-SALMON", barcode: "8990002000010", name: "Sushi Salmon Mentai 6 pcs", category: "Sushi", price: 2500000, cost: 1400000, stock: 15, lowStockAt: 5, unit: "porsi" },
-  { sku: "SSH-TUNA", barcode: "8990002000027", name: "Sushi Tuna Mayo 6 pcs", category: "Sushi", price: 2200000, cost: 1200000, stock: 12, lowStockAt: 4, unit: "porsi" },
-  { sku: "SSH-KANI", barcode: "8990002000034", name: "Sushi Kani Mayo 6 pcs", category: "Sushi", price: 2000000, cost: 1000000, stock: 12, lowStockAt: 4, unit: "porsi" },
-  { sku: "SSH-TAMAGO", barcode: "8990002000041", name: "Sushi Tamago 6 pcs", category: "Sushi", price: 1800000, cost: 900000, stock: 10, lowStockAt: 4, unit: "porsi" },
-  { sku: "SSH-PLATTER", barcode: "8990002000058", name: "Sushi Platter 24 pcs", category: "Sushi", price: 8500000, cost: 4800000, stock: 6, lowStockAt: 3, unit: "porsi" },
-  { sku: "SSH-BAKAR", barcode: "8990002000065", name: "Sushi Bakar Mix 8 pcs", category: "Sushi", price: 3200000, cost: 1800000, stock: 8, lowStockAt: 4, unit: "porsi", options: "Original,Extra mentai" },
-  { sku: "MNM-TEH", barcode: "8990003000019", name: "Es Teh Manis", category: "Minuman Bubuk", price: 500000, cost: 150000, stock: 100, unit: "gelas", options: "Normal,Less sugar,No sugar" },
-  { sku: "MNM-JERUK", barcode: "8990003000026", name: "Es Jeruk", category: "Minuman Bubuk", price: 700000, cost: 250000, stock: 80, unit: "gelas", options: "Normal,Less sugar" },
-  { sku: "MNM-MILO", barcode: "8990003000033", name: "Milo Dingin", category: "Minuman Bubuk", price: 1000000, cost: 400000, stock: 70, unit: "gelas", options: "Normal,Extra milo" },
-  { sku: "MNM-MATCHA", barcode: "8990003000040", name: "Matcha Latte", category: "Minuman Bubuk", price: 1200000, cost: 500000, stock: 60, unit: "gelas", options: "Dingin,Panas" },
-  { sku: "MNM-RED", barcode: "8990003000057", name: "Red Velvet Latte", category: "Minuman Bubuk", price: 1200000, cost: 500000, stock: 60, unit: "gelas", options: "Dingin,Panas" },
-  { sku: "MNM-COKELAT", barcode: "8990003000064", name: "Cokelat Bubuk", category: "Minuman Bubuk", price: 1000000, cost: 400000, stock: 70, unit: "gelas", options: "Dingin,Panas" },
-  { sku: "MNM-LEMON", barcode: "8990003000071", name: "Lemon Tea", category: "Minuman Bubuk", price: 800000, cost: 300000, stock: 80, unit: "gelas", options: "Normal,Less sugar" },
-  { sku: "MNM-KOPI", barcode: "8990003000088", name: "Kopi Susu Bubuk", category: "Minuman Bubuk", price: 800000, cost: 300000, stock: 90, unit: "gelas", options: "Dingin,Panas" },
-  { sku: "MNM-BOBA", barcode: "8990003000095", name: "Boba Brown Sugar", category: "Minuman Bubuk", price: 1300000, cost: 550000, stock: 50, unit: "gelas", options: "Normal,Less sugar" },
-  { sku: "CML-KENTANG", barcode: "8990004000018", name: "Kentang Goreng", category: "Camilan", price: 1200000, cost: 500000, stock: 25, lowStockAt: 5, unit: "porsi", options: "Original,Extra saus" },
-  { sku: "CML-PISANG", barcode: "8990004000025", name: "Pisang Goreng", category: "Camilan", price: 1000000, cost: 400000, stock: 20, lowStockAt: 5, unit: "porsi" },
-  { sku: "CML-TAHU", barcode: "8990004000032", name: "Tahu Cireng", category: "Camilan", price: 800000, cost: 350000, stock: 25, lowStockAt: 5, unit: "porsi", options: "Original,Pedas" },
-  { sku: "TMB-NASI", barcode: "8990005000017", name: "Extra Nasi", category: "Tambahan", price: 300000, cost: 100000, stock: 50, unit: "porsi" },
-  { sku: "TMB-TELUR", barcode: "8990005000024", name: "Extra Telur", category: "Tambahan", price: 400000, cost: 200000, stock: 50, unit: "pcs" },
-  { sku: "TMB-SAMBAL", barcode: "8990005000031", name: "Extra Sambal", category: "Tambahan", price: 200000, cost: 50000, stock: 60, unit: "sachet" },
+  { sku: "ESP-AMERICANO", barcode: "8990001000011", name: "Americano", category: "Espresso", price: 2400000, cost: 650000, stock: 80, unit: "cup", options: "Iced,Hot,Extra Shot (+5000)" },
+  { sku: "ESP-LATTE", barcode: "8990001000028", name: "Iced Cafe Latte", category: "Espresso", price: 3200000, cost: 1050000, stock: 70, unit: "cup", options: "Iced,Hot,Less Sugar,Oat Milk (+6000),Extra Shot (+5000)" },
+  { sku: "ESP-CAPPUCCINO", barcode: "8990001000035", name: "Cappuccino", category: "Espresso", price: 3200000, cost: 1050000, stock: 65, unit: "cup", options: "Hot,Iced,Oat Milk (+6000),Extra Shot (+5000)" },
+  { sku: "ESP-FLATWHITE", barcode: "8990001000042", name: "Flat White", category: "Espresso", price: 3400000, cost: 1100000, stock: 50, unit: "cup", options: "Hot,Oat Milk (+6000),Extra Shot (+5000)" },
+  { sku: "SIG-AREN", barcode: "8990002000010", name: "Kopi Susu Gula Aren", category: "Signature Coffee", price: 2800000, cost: 900000, stock: 90, unit: "cup", options: "Iced,Less Sugar,Oat Milk (+6000),Extra Shot (+5000)" },
+  { sku: "SIG-DIRTY", barcode: "8990002000027", name: "Dirty Latte", category: "Signature Coffee", price: 3600000, cost: 1200000, stock: 45, unit: "cup", options: "Iced,Oat Milk (+6000)" },
+  { sku: "SIG-SALTED", barcode: "8990002000034", name: "Salted Caramel Macchiato", category: "Signature Coffee", price: 3500000, cost: 1150000, stock: 50, unit: "cup", options: "Iced,Hot,Extra Caramel (+4000)" },
+  { sku: "NON-MATCHA", barcode: "8990003000019", name: "Matcha Latte", category: "Non-Coffee", price: 3400000, cost: 1200000, stock: 55, unit: "cup", options: "Iced,Hot,Less Sugar,Oat Milk (+6000)" },
+  { sku: "NON-CHOCO", barcode: "8990003000026", name: "Chocolate Signature", category: "Non-Coffee", price: 3200000, cost: 1100000, stock: 60, unit: "cup", options: "Iced,Hot,Oat Milk (+6000)" },
+  { sku: "NON-LYCHEE", barcode: "8990003000033", name: "Lychee Iced Tea", category: "Non-Coffee", price: 2600000, cost: 750000, stock: 75, unit: "cup", options: "Less Sugar,Normal" },
+  { sku: "NON-WATER", barcode: "8990003000040", name: "Mineral Water", category: "Non-Coffee", price: 1200000, cost: 350000, stock: 120, unit: "btl" },
+  { sku: "BRW-V60", barcode: "8990004000018", name: "V60 Single Origin", category: "Manual Brew", price: 3600000, cost: 1250000, stock: 35, unit: "cup", options: "Hot,Japanese Iced" },
+  { sku: "BRW-COLD", barcode: "8990004000025", name: "Cold Brew Black", category: "Manual Brew", price: 3000000, cost: 950000, stock: 40, lowStockAt: 6, unit: "btl" },
+  { sku: "PST-CROISSANT", barcode: "8990005000017", name: "Butter Croissant", category: "Pastry & Bakery", price: 2500000, cost: 950000, stock: 24, lowStockAt: 5, unit: "pcs" },
+  { sku: "PST-CHOCO", barcode: "8990005000024", name: "Pain au Chocolat", category: "Pastry & Bakery", price: 2800000, cost: 1100000, stock: 20, lowStockAt: 5, unit: "pcs" },
+  { sku: "PST-CINNAMON", barcode: "8990005000031", name: "Cinnamon Roll", category: "Pastry & Bakery", price: 2600000, cost: 1000000, stock: 18, lowStockAt: 4, unit: "pcs", options: "Warm,Normal,Cream Cheese (+5000)" },
+  { sku: "KTC-FRIES", barcode: "8990006000016", name: "Truffle Fries", category: "Kitchen & Brunch", price: 3200000, cost: 1100000, stock: 30, lowStockAt: 5, unit: "porsi" },
+  { sku: "KTC-SANDO", barcode: "8990006000023", name: "Chicken Katsu Sando", category: "Kitchen & Brunch", price: 4800000, cost: 1900000, stock: 20, lowStockAt: 4, unit: "porsi", options: "Original,Spicy,Extra Cheese (+6000)" },
+  { sku: "KTC-AGLIO", barcode: "8990006000030", name: "Spaghetti Aglio Olio", category: "Kitchen & Brunch", price: 4500000, cost: 1700000, stock: 22, lowStockAt: 4, unit: "porsi", options: "Level 1,Level 2,Smoked Beef (+8000)" },
+  { sku: "KTC-CARBONARA", barcode: "8990006000047", name: "Creamy Carbonara", category: "Kitchen & Brunch", price: 4900000, cost: 1950000, stock: 18, lowStockAt: 4, unit: "porsi" },
 ];
 
 const SEED_CUSTOMERS = [
@@ -90,19 +89,19 @@ function lcg(seed: number) {
 const SEED_STORES = [
   {
     code: "kemang",
-    name: "Warkop Berkah — Kemang",
+    name: "Kopi Tera — Kemang",
     address: "Jl. Kemang Selatan No. 18, Jakarta Selatan",
     phone: "021 719 2288",
   },
   {
-    code: "tebet",
-    name: "Warkop Berkah — Tebet",
-    address: "Jl. Tebet Timur Dalam No. 7, Jakarta Selatan",
+    code: "senopati",
+    name: "Kopi Tera — Senopati",
+    address: "Jl. Senopati No. 42, Jakarta Selatan",
     phone: "021 829 4411",
   },
 ];
 
-/** Demo warkop for an empty database. Run once from `pnpm db:setup`. */
+/** Demo kafe untuk database kosong. Dijalankan sekali lewat `pnpm db:setup`. */
 export async function seedIfEmpty(db: DB) {
   const existing = await db.select({ id: users.id }).from(users).limit(1);
   if (existing.length > 0) return;
@@ -113,9 +112,12 @@ export async function seedIfEmpty(db: DB) {
   const cashierPin =
     process.env.SEED_CASHIER_PIN ??
     (process.env.NODE_ENV === "production" ? "" : "123456");
-  if (!/^\d{4,8}$/.test(adminPin) || !/^\d{4,8}$/.test(cashierPin)) {
+  const kitchenPin =
+    process.env.SEED_KITCHEN_PIN ??
+    (process.env.NODE_ENV === "production" ? "" : "2222");
+  if (!/^\d{4,8}$/.test(adminPin) || !/^\d{4,8}$/.test(cashierPin) || !/^\d{4,8}$/.test(kitchenPin)) {
     throw new Error(
-      "SEED_ADMIN_PIN dan SEED_CASHIER_PIN wajib (4–8 digit) sebelum seed production.",
+      "SEED_ADMIN_PIN, SEED_CASHIER_PIN, dan SEED_KITCHEN_PIN wajib (4–8 digit) sebelum seed production.",
     );
   }
 
@@ -130,9 +132,10 @@ export async function seedIfEmpty(db: DB) {
         SEED_STORES.map((store) => ({
           ...store,
           currency: "IDR",
-          taxRate: 1100,
+          serviceChargeRate: 500,
+          taxRate: 1000,
           receiptWidth: "80" as const,
-          receiptFooter: "Terima kasih. Semua sudah tertera.",
+          receiptFooter: "Terima kasih sudah mampir di Kopi Tera.",
           pointsPerAmount: 1_000_000,
           active: true,
         })),
@@ -154,17 +157,24 @@ export async function seedIfEmpty(db: DB) {
           pinHash: hashPin(cashierPin),
           role: "cashier",
         },
+        {
+          name: "Dina Kartika",
+          username: "barista",
+          pinHash: hashPin(kitchenPin),
+          role: "kitchen",
+        },
       ])
       .returning({ id: users.id, role: users.role });
 
     const admin = staff.find((user) => user.role === "admin")!;
     const cashier = staff.find((user) => user.role === "cashier")!;
+    const kitchen = staff.find((user) => user.role === "kitchen")!;
 
-    // Kasir hanya ditugaskan ke Kemang; manajemen bisa membuka semua toko.
-    await tx.insert(userStores).values({
-      userId: cashier.id,
-      storeId: storeRows[0].id,
-    });
+    // Kasir dan Barista/Dapur hanya ditugaskan ke Kemang; manajemen bisa membuka semua cabang.
+    await tx.insert(userStores).values([
+      { userId: cashier.id, storeId: storeRows[0].id },
+      { userId: kitchen.id, storeId: storeRows[0].id },
+    ]);
 
     let productRows: { id: number; name: string; sku: string; price: number; cost: number }[] = [];
     // Resep contoh ditautkan ke produk toko pertama (Kemang).
@@ -255,7 +265,7 @@ export async function seedIfEmpty(db: DB) {
           }));
           const totals = computeTotals(
             lines.map((line) => ({ unitPrice: line.price, qty: line.qty })),
-            { taxRate: 1100 },
+            { serviceChargeRate: 500, taxRate: 1000 },
           );
           const method = rnd() < 0.42 ? "cash" : rnd() < 0.75 ? "qris" : "card";
           const paid =
@@ -280,6 +290,7 @@ export async function seedIfEmpty(db: DB) {
               userId: admin.id,
               customerId: customer?.id ?? null,
               subtotal: totals.subtotal,
+              serviceChargeAmount: totals.serviceChargeAmount,
               taxAmount: totals.taxAmount,
               total: totals.total,
               costTotal: lines.reduce((sum, line) => sum + line.cost * line.qty, 0),
@@ -404,15 +415,13 @@ export async function seedIfEmpty(db: DB) {
       })),
     );
 
-    // Resep BOM contoh: Ricebowl Telur Sambal memakai 1 nasi + 1 telur.
+    // Resep BOM contoh: Pain au Chocolat memakai 1 Butter Croissant (contoh BOM ringan).
     const bySku = new Map(firstStoreProducts.map((item) => [item.sku, item.id]));
-    const bowl = bySku.get("RCB-TELUR");
-    const rice = bySku.get("TMB-NASI");
-    const egg = bySku.get("TMB-TELUR");
-    if (bowl && rice && egg) {
+    const chocoPastry = bySku.get("PST-CHOCO");
+    const butterCroissant = bySku.get("PST-CROISSANT");
+    if (chocoPastry && butterCroissant) {
       await tx.insert(recipeItems).values([
-        { productId: bowl, ingredientId: rice, qty: 1 },
-        { productId: bowl, ingredientId: egg, qty: 1 },
+        { productId: chocoPastry, ingredientId: butterCroissant, qty: 1 },
       ]);
     }
   });

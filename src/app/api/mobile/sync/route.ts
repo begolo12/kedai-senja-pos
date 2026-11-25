@@ -19,6 +19,7 @@ import {
   mobileUser,
 } from "@/lib/mobile-auth";
 import { computeTotals, orderNumber } from "@/lib/money";
+import { computeModifierDelta } from "@/lib/modifiers";
 import { dayStart, DAY_MS } from "@/lib/dates";
 import { getSettings } from "@/lib/settings";
 import { deductForSale } from "@/lib/recipes";
@@ -41,9 +42,11 @@ const orderSchema = z.object({
   items: z.array(itemSchema).min(1).max(60),
   discountType: z.enum(["amount", "percent"]).nullable(),
   discountValue: z.number().int().min(0),
+  serviceChargeRate: z.number().int().min(0).max(5000).default(0),
   taxRate: z.number().int().min(0).max(5000),
   subtotal: z.number().int().min(0),
   discountAmount: z.number().int().min(0),
+  serviceChargeAmount: z.number().int().min(0).default(0),
   taxAmount: z.number().int().min(0),
   total: z.number().int().min(1),
   costTotal: z.number().int().min(0),
@@ -249,7 +252,9 @@ async function pushOrder(
       if (!prod || !prod.active) {
         throw new Error(`Produk ${item.name} tidak aktif atau tidak ditemukan.`);
       }
-      if (prod.price !== item.unitPrice) {
+      const expectedUnitPrice =
+        prod.price + computeModifierDelta(prod.options, item.note);
+      if (expectedUnitPrice !== item.unitPrice) {
         throw new Error(`Harga ${prod.name} tidak cocok dengan sistem.`);
       }
       saleLines.push({ product: prod, qty: item.qty });
@@ -257,11 +262,11 @@ async function pushOrder(
         productId: prod.id,
         name: prod.name,
         sku: prod.sku,
-        unitPrice: prod.price,
+        unitPrice: expectedUnitPrice,
         cost: prod.cost,
         qty: item.qty,
         note: item.note,
-        lineTotal: prod.price * item.qty,
+        lineTotal: expectedUnitPrice * item.qty,
       });
     }
 
@@ -338,13 +343,14 @@ async function pushOrder(
       );
     }
 
-    // 5. Verifikasi total dengan taxRate server (settings.taxRate), BUKAN input.taxRate
+    // 5. Verifikasi total dengan serviceChargeRate & taxRate server
     const expected = computeTotals(
       itemRecords.map((item) => ({ unitPrice: item.unitPrice, qty: item.qty })),
       {
         discountType: input.discountType,
         discountValue: input.discountValue,
         fixedDiscount: voucherAmount + redeemAmount,
+        serviceChargeRate: settings.serviceChargeRate,
         taxRate: settings.taxRate,
       },
     );
@@ -352,6 +358,7 @@ async function pushOrder(
     if (
       expected.subtotal !== input.subtotal ||
       expected.discountAmount !== input.discountAmount ||
+      expected.serviceChargeAmount !== input.serviceChargeAmount ||
       expected.taxAmount !== input.taxAmount ||
       expected.total !== input.total
     ) {
@@ -428,6 +435,7 @@ async function pushOrder(
         discountType: input.discountType,
         discountValue: input.discountValue,
         discountAmount: expected.discountAmount,
+        serviceChargeAmount: expected.serviceChargeAmount,
         taxAmount: expected.taxAmount,
         total: expected.total,
         costTotal: itemRecords.reduce((sum, item) => sum + item.cost * item.qty, 0),

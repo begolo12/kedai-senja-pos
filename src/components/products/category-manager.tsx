@@ -28,7 +28,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { deleteCategoryAction, saveCategoryAction } from "@/lib/actions/catalog";
 
-type Category = { id: number; name: string; color: string; sortOrder: number };
+type Category = {
+  id: number;
+  name: string;
+  color: string;
+  station: "bar" | "kitchen";
+  sortOrder: number;
+};
 
 export function CategoryManager({ categories }: { categories: Category[] }) {
   const router = useRouter();
@@ -36,6 +42,7 @@ export function CategoryManager({ categories }: { categories: Category[] }) {
   const [editing, setEditing] = useState<Category | null>(null);
   const [name, setName] = useState("");
   const [color, setColor] = useState("#a2542a");
+  const [station, setStation] = useState<"bar" | "kitchen">("bar");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -43,6 +50,7 @@ export function CategoryManager({ categories }: { categories: Category[] }) {
     setEditing(null);
     setName("");
     setColor("#a2542a");
+    setStation("bar");
     setError(null);
   }
 
@@ -54,6 +62,7 @@ export function CategoryManager({ categories }: { categories: Category[] }) {
         id: editing?.id,
         name,
         color,
+        station,
         sortOrder: editing?.sortOrder ?? categories.length + 1,
       });
       if (!result.ok) {
@@ -83,12 +92,26 @@ export function CategoryManager({ categories }: { categories: Category[] }) {
           <DialogDescription>Dipakai untuk filter di kasir dan laporan.</DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={save} className="flex items-end gap-2">
-          <div className="flex-1 space-y-1">
+        <form onSubmit={save} className="flex flex-wrap items-end gap-2">
+          <div className="min-w-36 flex-1 space-y-1">
             <Label htmlFor="cat-name" className="text-[10px] tracking-[0.12em] text-muted-foreground uppercase">
               Nama
             </Label>
             <Input id="cat-name" value={name} onChange={(e) => setName(e.target.value)} required />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="cat-station" className="text-[10px] tracking-[0.12em] text-muted-foreground uppercase">
+              Stasiun
+            </Label>
+            <select
+              id="cat-station"
+              value={station}
+              onChange={(e) => setStation(e.target.value as "bar" | "kitchen")}
+              className="h-8 border border-input bg-card px-2 text-xs text-foreground outline-none focus:ring-2 focus:ring-ring/40"
+            >
+              <option value="bar">Barista</option>
+              <option value="kitchen">Dapur</option>
+            </select>
           </div>
           <div className="space-y-1">
             <Label htmlFor="cat-color" className="text-[10px] tracking-[0.12em] text-muted-foreground uppercase">

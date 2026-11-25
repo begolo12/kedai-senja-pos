@@ -3,7 +3,7 @@ import Link from "next/link";
 import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { expenses, shifts, users } from "@/lib/db/schema";
-import { requireStore } from "@/lib/auth";
+import { requireCashierOrAdmin } from "@/lib/auth";
 import { getSettings } from "@/lib/settings";
 import { getOpenShift, getShiftSummary } from "@/lib/shifts";
 import { formatDateTime, formatMoney } from "@/lib/money";
@@ -14,7 +14,7 @@ import { CloseShiftForm, ExpenseForm, OpenShiftForm } from "@/components/shift/s
 export const metadata: Metadata = { title: "Shift" };
 
 export default async function ShiftPage() {
-  const { user, store } = await requireStore();
+  const { user, store } = await requireCashierOrAdmin();
   const settings = await getSettings(store.id);
   const current = await getOpenShift(user.id, store.id);
 

@@ -21,7 +21,7 @@ export type StaffValues = {
   id?: number;
   name: string;
   username: string;
-  role: "admin" | "cashier";
+  role: "admin" | "cashier" | "kitchen";
   active: boolean;
   storeIds: number[];
 };
@@ -37,7 +37,7 @@ export function StaffDialog({
   const [open, setOpen] = useState(false);
   const [name, setName] = useState(staff?.name ?? "");
   const [username, setUsername] = useState(staff?.username ?? "");
-  const [role, setRole] = useState<"admin" | "cashier">(staff?.role ?? "cashier");
+  const [role, setRole] = useState<"admin" | "cashier" | "kitchen">(staff?.role ?? "cashier");
   const [active, setActive] = useState(staff?.active ?? true);
   const [storeIds, setStoreIds] = useState<number[]>(staff?.storeIds ?? []);
   const [pin, setPin] = useState("");
@@ -133,10 +133,11 @@ export function StaffDialog({
               <select
                 id="s-role"
                 value={role}
-                onChange={(e) => setRole(e.target.value as "admin" | "cashier")}
-                className="h-8 w-full border border-input bg-transparent px-2 text-sm outline-none focus:ring-2 focus:ring-ring/40"
+                onChange={(e) => setRole(e.target.value as "admin" | "cashier" | "kitchen")}
+                className="h-8 w-full border border-input bg-card px-2 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring/40"
               >
                 <option value="cashier">Kasir</option>
+                <option value="kitchen">Barista / Dapur</option>
                 <option value="admin">Manajemen</option>
               </select>
             </div>
@@ -156,7 +157,7 @@ export function StaffDialog({
               />
             </div>
           </div>
-          {role === "cashier" ? (
+          {role !== "admin" ? (
             <div className="space-y-1">
               <span className="text-[10px] tracking-[0.12em] text-muted-foreground uppercase">
                 Toko yang boleh dibuka

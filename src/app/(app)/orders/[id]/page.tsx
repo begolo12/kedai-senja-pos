@@ -4,7 +4,7 @@ import { ArrowLeft, Printer, UserRound } from "lucide-react";
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { customers, orderItems, orders, shifts, users } from "@/lib/db/schema";
-import { requireAdmin } from "@/lib/auth";
+import { requireCashierOrAdmin } from "@/lib/auth";
 import { getSettings } from "@/lib/settings";
 import { formatDateTime, formatMoney } from "@/lib/money";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,7 @@ import { PageHeader, SectionLabel } from "@/components/shared/page-header";
 import { RefundButton } from "@/components/orders/refund-button";
 
 export default async function OrderDetailPage({ params }: PageProps<"/orders/[id]">) {
-  const { user, store } = await requireAdmin();
+  const { user, store } = await requireCashierOrAdmin();
   const { id } = await params;
   const orderId = Number(id);
   if (!Number.isInteger(orderId) || orderId <= 0) notFound();
@@ -62,7 +62,10 @@ export default async function OrderDetailPage({ params }: PageProps<"/orders/[id
             <Button nativeButton={false} variant="outline" render={<Link href={`/receipt/${order.id}`} />}>
               <Printer /> Struk
             </Button>
-            {user.role === "admin" && order.status !== "refunded" ? (
+            {user.role === "admin" &&
+            order.status !== "refunded" &&
+            order.status !== "cancelled" &&
+            order.status !== "open" ? (
               <RefundButton
                 orderId={order.id}
                 number={order.number}
@@ -161,6 +164,12 @@ export default async function OrderDetailPage({ params }: PageProps<"/orders/[id
               <Row
                 label={`Tukar ${order.pointsRedeemed} poin`}
                 value={`−${formatMoney(order.redeemAmount, settings.currency)}`}
+              />
+            ) : null}
+            {order.serviceChargeAmount > 0 ? (
+              <Row
+                label={`Service ${(settings.serviceChargeRate / 100).toLocaleString("id-ID")}%`}
+                value={formatMoney(order.serviceChargeAmount, settings.currency)}
               />
             ) : null}
             <Row label={`Pajak ${(settings.taxRate / 100).toLocaleString("id-ID")}%`} value={formatMoney(order.taxAmount, settings.currency)} />

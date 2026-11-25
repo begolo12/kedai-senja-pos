@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { categories, products, stores, users } from "@/lib/db/schema";
-import { getCurrentUser, userCanUseStore } from "@/lib/auth";
+import { defaultRouteForRole, getCurrentUser, userCanUseStore } from "@/lib/auth";
 import { readPending, readSession, writeSession } from "@/lib/session";
 import { storeSchema } from "@/lib/validation";
 import type { ActionResult } from "@/lib/auth";
@@ -34,7 +34,7 @@ export async function chooseStoreAction(formData: FormData) {
   if (!(await userCanUseStore(user, storeId))) redirect(`${fallback}?error=1`);
 
   await writeSession(user.id, storeId);
-  redirect(user.role === "admin" ? "/" : "/pos");
+  redirect(defaultRouteForRole(user.role));
 }
 
 export async function saveStoreAction(

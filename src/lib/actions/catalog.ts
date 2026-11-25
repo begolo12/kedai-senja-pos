@@ -140,12 +140,12 @@ export async function saveCategoryAction(input: unknown): Promise<ActionResult> 
     if (data.id) {
       await db
         .update(categories)
-        .set({ name: data.name, color: data.color, sortOrder: data.sortOrder })
+        .set({ name: data.name, color: data.color, station: data.station, sortOrder: data.sortOrder })
         .where(and(eq(categories.id, data.id), eq(categories.storeId, storeId)));
     } else {
       await db
         .insert(categories)
-        .values({ storeId, name: data.name, color: data.color, sortOrder: data.sortOrder });
+        .values({ storeId, name: data.name, color: data.color, station: data.station, sortOrder: data.sortOrder });
     }
   } catch (error) {
     if (duplicate(error)) return { ok: false, error: "Nama kategori sudah ada." };

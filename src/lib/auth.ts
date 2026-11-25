@@ -87,6 +87,12 @@ export const getStoreContext = cache(async (): Promise<{
   return { user, store };
 });
 
+export function defaultRouteForRole(role: User["role"]): string {
+  if (role === "admin") return "/";
+  if (role === "kitchen") return "/kds";
+  return "/pos";
+}
+
 export async function requireStore(): Promise<StoreContext> {
   const context = await getStoreContext();
   if (!context) redirect("/login");
@@ -94,9 +100,15 @@ export async function requireStore(): Promise<StoreContext> {
   return { user: context.user, store: context.store };
 }
 
+export async function requireCashierOrAdmin(): Promise<StoreContext> {
+  const context = await requireStore();
+  if (context.user.role === "kitchen") redirect("/kds");
+  return context;
+}
+
 export async function requireAdmin(): Promise<StoreContext> {
   const context = await requireStore();
-  if (context.user.role !== "admin") redirect("/pos");
+  if (context.user.role !== "admin") redirect(defaultRouteForRole(context.user.role));
   return context;
 }
 
@@ -110,6 +122,17 @@ export async function assertStore(): Promise<
     return { ok: false, error: "Pilih toko dulu. Muat ulang halaman." };
   }
   return { ok: true, user: context.user, store: context.store };
+}
+
+export async function assertCashierOrAdmin(): Promise<
+  { ok: true; user: User; store: Store } | { ok: false; error: string }
+> {
+  const context = await assertStore();
+  if (!context.ok) return context;
+  if (context.user.role === "kitchen") {
+    return { ok: false, error: "Hanya kasir atau manajemen yang boleh melakukan ini." };
+  }
+  return context;
 }
 
 export async function assertAdmin(): Promise<

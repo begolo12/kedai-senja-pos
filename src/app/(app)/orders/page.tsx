@@ -3,25 +3,28 @@ import Link from "next/link";
 import { and, desc, eq, gte, like, lt, or, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { customers, orders, users } from "@/lib/db/schema";
-import { requireAdmin } from "@/lib/auth";
+import { requireCashierOrAdmin } from "@/lib/auth";
 import { getSettings } from "@/lib/settings";
 import { formatDateTime, formatMoney } from "@/lib/money";
 import { readDateRange } from "@/lib/dates";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { PageHeader } from "@/components/shared/page-header";
+import { ReceiptText } from "lucide-react";
+import { PageHeader, EmptyState } from "@/components/shared/page-header";
 
 export const metadata: Metadata = { title: "Pesanan" };
 
 const STATUS = [
   { value: "all", label: "Semua" },
   { value: "completed", label: "Selesai" },
+  { value: "open", label: "Terbuka" },
   { value: "partially_refunded", label: "Refund parsial" },
   { value: "refunded", label: "Refund" },
+  { value: "cancelled", label: "Batal" },
 ] as const;
 
 export default async function OrdersPage({ searchParams }: PageProps<"/orders">) {
-  const { store } = await requireAdmin();
+  const { store } = await requireCashierOrAdmin();
   const params = await searchParams;
   const q = typeof params.q === "string" ? params.q.trim() : "";
   const status = typeof params.status === "string" ? params.status : "all";
@@ -40,7 +43,10 @@ export default async function OrdersPage({ searchParams }: PageProps<"/orders">)
     gte(orders.createdAt, from),
     lt(orders.createdAt, to),
     STATUS.some((s) => s.value === status && status !== "all")
-      ? eq(orders.status, status as "completed" | "partially_refunded" | "refunded")
+      ? eq(
+          orders.status,
+          status as "completed" | "open" | "partially_refunded" | "refunded" | "cancelled",
+        )
       : undefined,
     q
       ? or(like(orders.number, `%${q}%`), like(customers.name, `%${q}%`))
@@ -134,57 +140,62 @@ export default async function OrdersPage({ searchParams }: PageProps<"/orders">)
         <Summary label="Nilai refund" value={formatMoney(Number(totals.refunds), settings.currency)} />
       </section>
 
-      <section className="overflow-x-auto border border-border bg-card">
-        <table className="w-full min-w-[720px] text-sm">
-          <thead>
-            <tr className="border-b border-border text-left text-[10px] tracking-[0.12em] text-muted-foreground uppercase">
-              <th className="px-4 py-2.5 font-medium">Nomor</th>
-              <th className="px-4 py-2.5 font-medium">Waktu</th>
-              <th className="px-4 py-2.5 font-medium">Kasir</th>
-              <th className="px-4 py-2.5 font-medium">Pelanggan</th>
-              <th className="px-4 py-2.5 font-medium">Bayar</th>
-              <th className="px-4 py-2.5 text-right font-medium">Total</th>
-              <th className="px-4 py-2.5 text-right font-medium">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((order) => (
-              <tr key={order.id} className="border-b border-border/70 last:border-0 hover:bg-muted/40">
-                <td className="px-4 py-2.5">
-                  <Link href={`/orders/${order.id}`} className="font-mono text-xs underline-offset-4 hover:underline">
-                    {order.number}
-                  </Link>
-                </td>
-                <td className="px-4 py-2.5 text-xs text-muted-foreground">{formatDateTime(order.createdAt)}</td>
-                <td className="px-4 py-2.5 text-xs">{order.cashier}</td>
-                <td className="px-4 py-2.5 text-xs">{order.customer ?? "Umum"}</td>
-                <td className="px-4 py-2.5">
-                  <span className="stamp border-border text-muted-foreground">{order.method}</span>
-                </td>
-                <td className="px-4 py-2.5 text-right font-mono text-xs tabular">
-                  {formatMoney(order.total, settings.currency)}
-                </td>
-                <td className="px-4 py-2.5 text-right">
-                  {order.status === "refunded" ? (
-                    <span className="stamp border-destructive/40 text-destructive">Refund</span>
-                  ) : order.status === "partially_refunded" ? (
-                    <span className="stamp border-signal/50 text-signal">Parsial</span>
-                  ) : (
-                    <span className="stamp border-border text-muted-foreground">Selesai</span>
-                  )}
-                </td>
+      {rows.length === 0 ? (
+        <EmptyState
+          icon={<ReceiptText className="size-6" strokeWidth={1.4} />}
+          title="Belum ada pesanan"
+          description="Tidak ada pesanan pada filter dan rentang tanggal ini."
+        />
+      ) : (
+        <section className="overflow-x-auto border border-border bg-card">
+          <table className="w-full min-w-[720px] text-sm">
+            <thead>
+              <tr className="border-b border-border text-left text-[10px] tracking-[0.12em] text-muted-foreground uppercase">
+                <th className="px-4 py-2.5 font-medium">Nomor</th>
+                <th className="px-4 py-2.5 font-medium">Waktu</th>
+                <th className="px-4 py-2.5 font-medium">Kasir</th>
+                <th className="px-4 py-2.5 font-medium">Pelanggan</th>
+                <th className="px-4 py-2.5 font-medium">Bayar</th>
+                <th className="px-4 py-2.5 text-right font-medium">Total</th>
+                <th className="px-4 py-2.5 text-right font-medium">Status</th>
               </tr>
-            ))}
-            {rows.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="px-4 py-10 text-center text-sm text-muted-foreground">
-                  Tidak ada pesanan pada filter ini.
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
-      </section>
+            </thead>
+            <tbody>
+              {rows.map((order) => (
+                <tr key={order.id} className="border-b border-border/70 last:border-0 hover:bg-muted/40">
+                  <td className="px-4 py-2.5">
+                    <Link href={`/orders/${order.id}`} className="font-mono text-xs underline-offset-4 hover:underline">
+                      {order.number}
+                    </Link>
+                  </td>
+                  <td className="px-4 py-2.5 text-xs text-muted-foreground">{formatDateTime(order.createdAt)}</td>
+                  <td className="px-4 py-2.5 text-xs">{order.cashier}</td>
+                  <td className="px-4 py-2.5 text-xs">{order.customer ?? "Umum"}</td>
+                  <td className="px-4 py-2.5">
+                    <span className="stamp border-border text-muted-foreground">{order.method}</span>
+                  </td>
+                  <td className="px-4 py-2.5 text-right font-mono text-xs tabular">
+                    {formatMoney(order.total, settings.currency)}
+                  </td>
+                  <td className="px-4 py-2.5 text-right">
+                    {order.status === "refunded" ? (
+                      <span className="stamp border-destructive/40 text-destructive">Refund</span>
+                    ) : order.status === "cancelled" ? (
+                      <span className="stamp border-destructive/40 text-destructive">Batal</span>
+                    ) : order.status === "open" ? (
+                      <span className="stamp border-signal/50 text-signal">Terbuka</span>
+                    ) : order.status === "partially_refunded" ? (
+                      <span className="stamp border-signal/50 text-signal">Parsial</span>
+                    ) : (
+                      <span className="stamp border-border text-muted-foreground">Selesai</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
       <p className="text-[11px] text-muted-foreground">Maksimal 100 pesanan terbaru pada rentang ini.</p>
     </div>
   );

@@ -64,13 +64,14 @@ export type DiscountType = "amount" | "percent";
 export type CartTotals = {
   subtotal: number;
   discountAmount: number;
+  serviceChargeAmount: number;
   taxAmount: number;
   total: number;
 };
 
 /**
  * Server and client share this so the ticket always matches the charge.
- * Discount is capped at the subtotal; tax applies after discount.
+ * Discount is capped at the subtotal; service charge & tax apply after discount.
  * `fixedDiscount` stacks on top of the manual discount (voucher, poin).
  */
 export function computeTotals(
@@ -79,11 +80,13 @@ export function computeTotals(
     discountType = null,
     discountValue = 0,
     fixedDiscount = 0,
+    serviceChargeRate = 0,
     taxRate = 0,
   }: {
     discountType?: DiscountType | null;
     discountValue?: number;
     fixedDiscount?: number;
+    serviceChargeRate?: number;
     taxRate?: number;
   } = {},
 ): CartTotals {
@@ -100,13 +103,15 @@ export function computeTotals(
         : 0;
   const discountAmount = Math.min(subtotal, rawDiscount + Math.max(0, Math.round(fixedDiscount)));
   const taxable = subtotal - discountAmount;
-  const taxAmount = Math.round((taxable * clamp(taxRate, 0, 10000)) / 10000);
+  const serviceChargeAmount = Math.round((taxable * clamp(serviceChargeRate, 0, 5000)) / 10000);
+  const taxAmount = Math.round(((taxable + serviceChargeAmount) * clamp(taxRate, 0, 10000)) / 10000);
 
   return {
     subtotal,
     discountAmount,
+    serviceChargeAmount,
     taxAmount,
-    total: taxable + taxAmount,
+    total: taxable + serviceChargeAmount + taxAmount,
   };
 }
 

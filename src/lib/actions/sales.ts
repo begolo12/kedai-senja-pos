@@ -12,8 +12,9 @@ import {
   shifts,
   vouchers,
 } from "@/lib/db/schema";
-import { assertAdmin, assertStore } from "@/lib/auth";
+import { assertAdmin, assertCashierOrAdmin } from "@/lib/auth";
 import { computeTotals, orderNumber } from "@/lib/money";
+import { computeModifierDelta } from "@/lib/modifiers";
 import { dayStart } from "@/lib/dates";
 import { deductForSale, restoreForRefund } from "@/lib/recipes";
 import { pointsWithMultiplier, resolveTier } from "@/lib/tiers";
@@ -39,7 +40,7 @@ function toPayments(
 }
 
 export async function checkoutAction(input: unknown): Promise<CheckoutResult> {
-  const auth = await assertStore();
+  const auth = await assertCashierOrAdmin();
   if (!auth.ok) return auth;
   const { user, store } = auth;
 
@@ -111,13 +112,17 @@ export async function checkoutAction(input: unknown): Promise<CheckoutResult> {
       }
     }
 
-    const lines = rows.map(({ product, qty, note }) => ({
-      product: product!,
-      qty,
-      note,
-      lineTotal: product!.price * qty,
-    }));
-    const subtotal = lines.reduce((sum, l) => sum + l.product.price * l.qty, 0);
+    const lines = rows.map(({ product, qty, note }) => {
+      const unitPrice = product!.price + computeModifierDelta(product!.options, note);
+      return {
+        product: product!,
+        qty,
+        note,
+        unitPrice,
+        lineTotal: unitPrice * qty,
+      };
+    });
+    const subtotal = lines.reduce((sum, l) => sum + l.lineTotal, 0);
     const rawManual =
       data.discountType === "percent"
         ? Math.round((subtotal * Math.min(100, Math.max(0, data.discountValue))) / 100)
@@ -221,11 +226,12 @@ export async function checkoutAction(input: unknown): Promise<CheckoutResult> {
 
     const taxRate = store.taxRate;
     const totals = computeTotals(
-      lines.map((l) => ({ unitPrice: l.product.price, qty: l.qty })),
+      lines.map((l) => ({ unitPrice: l.unitPrice, qty: l.qty })),
       {
         discountType: data.discountType,
         discountValue: data.discountValue,
         fixedDiscount: voucherAmount + redeemAmount,
+        serviceChargeRate: store.serviceChargeRate,
         taxRate,
       },
     );
@@ -291,6 +297,7 @@ export async function checkoutAction(input: unknown): Promise<CheckoutResult> {
         discountType: data.discountType,
         discountValue: data.discountValue,
         discountAmount: totals.discountAmount,
+        serviceChargeAmount: totals.serviceChargeAmount,
         taxAmount: totals.taxAmount,
         total: totals.total,
         costTotal: lines.reduce((s, l) => s + l.product.cost * l.qty, 0),
@@ -319,7 +326,7 @@ export async function checkoutAction(input: unknown): Promise<CheckoutResult> {
         productId: l.product.id,
         name: l.product.name,
         sku: l.product.sku,
-        unitPrice: l.product.price,
+        unitPrice: l.unitPrice,
         cost: l.product.cost,
         qty: l.qty,
         note: l.note || null,

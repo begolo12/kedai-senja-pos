@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { TeraMark } from "@/components/brand";
 import { ArrowUpRight } from "lucide-react";
-import { getCurrentUser } from "@/lib/auth";
+import { defaultRouteForRole, getCurrentUser } from "@/lib/auth";
 import { readPending } from "@/lib/session";
 import { LoginForm } from "@/components/login-form";
 
@@ -10,7 +10,7 @@ export const metadata: Metadata = { title: "Masuk" };
 
 export default async function LoginPage() {
   const current = await getCurrentUser();
-  if (current) redirect(current.role === "admin" ? "/" : "/pos");
+  if (current) redirect(defaultRouteForRole(current.role));
   if (await readPending()) redirect("/select-store");
 
   return (

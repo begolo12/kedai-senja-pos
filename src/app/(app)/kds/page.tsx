@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { and, asc, eq, gte, inArray, ne } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { orderItems, orders } from "@/lib/db/schema";
+import { categories, orderItems, orders, products } from "@/lib/db/schema";
 import { requireStore } from "@/lib/auth";
 import { dayStart } from "@/lib/dates";
 import { PageHeader } from "@/components/shared/page-header";
@@ -31,6 +31,7 @@ export default async function KdsPage() {
         gte(orders.createdAt, today),
         ne(orders.status, "refunded"),
         ne(orders.status, "merged"),
+        ne(orders.status, "cancelled"),
         ne(orders.kitchenStatus, "served"),
       ),
     )
@@ -44,8 +45,11 @@ export default async function KdsPage() {
           name: orderItems.name,
           qty: orderItems.qty,
           note: orderItems.note,
+          station: categories.station,
         })
         .from(orderItems)
+        .leftJoin(products, eq(orderItems.productId, products.id))
+        .leftJoin(categories, eq(products.categoryId, categories.id))
         .where(
           inArray(
             orderItems.orderId,
@@ -55,10 +59,18 @@ export default async function KdsPage() {
         .orderBy(asc(orderItems.id))
     : [];
 
-  const itemsByOrder = new Map<number, { name: string; qty: number; note: string | null }[]>();
+  const itemsByOrder = new Map<
+    number,
+    { name: string; qty: number; note: string | null; station: "bar" | "kitchen" }[]
+  >();
   for (const item of items) {
     const list = itemsByOrder.get(item.orderId) ?? [];
-    list.push({ name: item.name, qty: item.qty, note: item.note });
+    list.push({
+      name: item.name,
+      qty: item.qty,
+      note: item.note,
+      station: item.station === "kitchen" ? "kitchen" : "bar",
+    });
     itemsByOrder.set(item.orderId, list);
   }
 

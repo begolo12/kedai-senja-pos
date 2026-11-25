@@ -63,3 +63,6 @@ mobile/android
 .agents
 .claude
 skills-lock.json
+graphify-out/
+test-results/
+.impeccable-shots/

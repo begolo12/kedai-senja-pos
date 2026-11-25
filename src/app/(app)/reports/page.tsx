@@ -300,7 +300,7 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
-        <section className="border border-border bg-card">
+        <section className="min-w-0 border border-border bg-card">
           <div className="border-b border-border px-5 py-4">
             <SectionLabel>Produk</SectionLabel>
             <h2 className="font-serif text-2xl leading-none">Paling laku</h2>

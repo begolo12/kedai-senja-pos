@@ -9,6 +9,7 @@ export type StoreSettings = {
   address: string;
   phone: string;
   currency: string;
+  serviceChargeRate: number;
   taxRate: number;
   receiptFooter: string;
   receiptWidth: "58" | "80";
@@ -33,6 +34,7 @@ export const getSettings = cache(async (storeId: number): Promise<StoreSettings>
     address: store.address,
     phone: store.phone,
     currency: store.currency,
+    serviceChargeRate: store.serviceChargeRate,
     taxRate: store.taxRate,
     receiptFooter: store.receiptFooter,
     receiptWidth: store.receiptWidth,

@@ -8,11 +8,15 @@ import {
   orderItems,
   orderPayments,
   orders,
+  products,
   shifts,
   storeTables,
 } from "@/lib/db/schema";
-import { assertAdmin, assertStore, type ActionResult } from "@/lib/auth";
+import { assertAdmin, assertCashierOrAdmin, type ActionResult } from "@/lib/auth";
 import { createOpenOrderInTx, type OpenOrderResult } from "@/lib/open-order";
+import { computeTotals } from "@/lib/money";
+import { computeModifierDelta } from "@/lib/modifiers";
+import { deductForSale, restoreForRefund } from "@/lib/recipes";
 import { pointsWithMultiplier, resolveTier } from "@/lib/tiers";
 import { tableSchema } from "@/lib/validation";
 
@@ -88,7 +92,7 @@ export async function toggleTableAction(id: number): Promise<ActionResult> {
 
 /** Kasir membuka tagihan meja dari keranjang: bayar nanti di halaman Meja. */
 export async function createOpenOrderAction(input: unknown): Promise<OpenOrderResult> {
-  const auth = await assertStore();
+  const auth = await assertCashierOrAdmin();
   if (!auth.ok) return auth;
   const { user, store } = auth;
 
@@ -136,6 +140,7 @@ export async function createOpenOrderAction(input: unknown): Promise<OpenOrderRe
       tableLabel: typeof data.tableLabel === "string" ? data.tableLabel.slice(0, 40) : null,
       note: typeof data.note === "string" ? data.note.slice(0, 200) : null,
       items: data.items as { productId: number; qty: number; note?: string }[],
+      serviceChargeRate: store.serviceChargeRate,
       taxRate: store.taxRate,
     });
   });
@@ -155,7 +160,7 @@ export async function settleOrderAction(
   payments: { method: "cash" | "card" | "qris"; amount: number }[],
   customerId: number | null,
 ): Promise<SettleResult> {
-  const auth = await assertStore();
+  const auth = await assertCashierOrAdmin();
   if (!auth.ok) return auth;
   const { user, store } = auth;
   if (!Number.isInteger(orderId) || orderId <= 0) {
@@ -355,23 +360,25 @@ export async function mergeOrdersAction(
       .where(eq(orderItems.orderId, sourceId));
 
     const items = await tx.select().from(orderItems).where(eq(orderItems.orderId, targetId));
-    const subtotal = items.reduce((sum, item) => sum + item.lineTotal, 0);
+    const totals = computeTotals(
+      items.map((item) => ({ unitPrice: item.unitPrice, qty: item.qty })),
+      {
+        discountType: target.discountType,
+        discountValue: target.discountValue,
+        serviceChargeRate: store.serviceChargeRate,
+        taxRate: store.taxRate,
+      },
+    );
     const costTotal = items.reduce((sum, item) => sum + item.cost * item.qty, 0);
-    const discountAmount =
-      target.discountType === "percent"
-        ? Math.round((subtotal * Math.min(100, Math.max(0, target.discountValue))) / 100)
-        : target.discountType === "amount"
-          ? Math.min(subtotal, Math.max(0, target.discountValue))
-          : 0;
-    const taxAmount = Math.round(((subtotal - discountAmount) * store.taxRate) / 10000);
 
     await tx
       .update(orders)
       .set({
-        subtotal,
-        discountAmount,
-        taxAmount,
-        total: subtotal - discountAmount + taxAmount,
+        subtotal: totals.subtotal,
+        discountAmount: totals.discountAmount,
+        serviceChargeAmount: totals.serviceChargeAmount,
+        taxAmount: totals.taxAmount,
+        total: totals.total,
         costTotal,
       })
       .where(eq(orders.id, targetId));
@@ -389,5 +396,193 @@ export async function mergeOrdersAction(
 
   revalidatePath("/tables");
   revalidatePath("/kds");
+  return result;
+}
+
+/** Tambah item susulan ke tagihan meja yang masih terbuka. */
+export async function addItemsToOpenOrderAction(
+  orderId: number,
+  items: { productId: number; qty: number; note?: string }[],
+): Promise<ActionResult> {
+  const auth = await assertCashierOrAdmin();
+  if (!auth.ok) return auth;
+  const { user, store } = auth;
+  if (!Number.isInteger(orderId) || orderId <= 0) {
+    return { ok: false, error: "Tagihan tidak valid." };
+  }
+  if (!Array.isArray(items) || items.length === 0 || items.length > 50) {
+    return { ok: false, error: "Pilih minimal satu item." };
+  }
+  for (const item of items) {
+    if (
+      !Number.isInteger(item.productId) ||
+      item.productId <= 0 ||
+      !Number.isInteger(item.qty) ||
+      item.qty <= 0 ||
+      item.qty > 999
+    ) {
+      return { ok: false, error: "Item tambahan tidak valid." };
+    }
+  }
+
+  const result = await db.transaction(async (tx) => {
+    const found = await tx
+      .select()
+      .from(orders)
+      .where(and(eq(orders.id, orderId), eq(orders.storeId, store.id)))
+      .for("update");
+    const order = found[0];
+    if (!order) return { ok: false as const, error: "Tagihan tidak ditemukan." };
+    if (order.status !== "open") {
+      return { ok: false as const, error: "Hanya tagihan terbuka yang bisa ditambah item." };
+    }
+
+    const merged = new Map<string, { productId: number; qty: number; note: string }>();
+    for (const item of items) {
+      const note = (item.note ?? "").trim().slice(0, 160);
+      const key = `${item.productId}::${note}`;
+      const existing = merged.get(key);
+      merged.set(key, {
+        productId: item.productId,
+        qty: (existing?.qty ?? 0) + item.qty,
+        note,
+      });
+    }
+
+    const rows = [];
+    for (const { productId, qty, note } of merged.values()) {
+      const p = await tx
+        .select()
+        .from(products)
+        .where(and(eq(products.id, productId), eq(products.storeId, store.id)))
+        .for("update");
+      if (!p[0]) return { ok: false as const, error: "Produk tidak ditemukan." };
+      if (!p[0].active) return { ok: false as const, error: `${p[0].name} sedang tidak dijual.` };
+      rows.push({ product: p[0], qty, note });
+    }
+
+    const lines = rows.map(({ product, qty, note }) => {
+      const unitPrice = product.price + computeModifierDelta(product.options, note);
+      return { product, qty, note, unitPrice, lineTotal: unitPrice * qty };
+    });
+
+    const deducted = await deductForSale(tx, {
+      storeId: store.id,
+      userId: user.id,
+      orderId: order.id,
+      lines: lines.map((line) => ({ product: line.product, qty: line.qty })),
+      createdAt: new Date(),
+    });
+    if (!deducted.ok) return { ok: false as const, error: deducted.error };
+
+    await tx.insert(orderItems).values(
+      lines.map((line) => ({
+        orderId: order.id,
+        productId: line.product.id,
+        name: line.product.name,
+        sku: line.product.sku,
+        unitPrice: line.unitPrice,
+        cost: line.product.cost,
+        qty: line.qty,
+        note: line.note || null,
+        lineTotal: line.lineTotal,
+      })),
+    );
+
+    const allItems = await tx.select().from(orderItems).where(eq(orderItems.orderId, order.id));
+    const totals = computeTotals(
+      allItems.map((item) => ({ unitPrice: item.unitPrice, qty: item.qty })),
+      {
+        discountType: order.discountType,
+        discountValue: order.discountValue,
+        serviceChargeRate: store.serviceChargeRate,
+        taxRate: store.taxRate,
+      },
+    );
+    const costTotal = allItems.reduce((sum, item) => sum + item.cost * item.qty, 0);
+
+    await tx
+      .update(orders)
+      .set({
+        subtotal: totals.subtotal,
+        discountAmount: totals.discountAmount,
+        serviceChargeAmount: totals.serviceChargeAmount,
+        taxAmount: totals.taxAmount,
+        total: totals.total,
+        costTotal,
+        kitchenStatus: "preparing",
+      })
+      .where(eq(orders.id, order.id));
+
+    return { ok: true as const };
+  });
+
+  if (result.ok) {
+    revalidatePath("/tables");
+    revalidatePath("/kds");
+    revalidatePath("/orders");
+    revalidatePath("/inventory");
+  }
+  return result;
+}
+
+/** Batalkan (void) tagihan meja terbuka dan kembalikan stok. */
+export async function cancelOpenOrderAction(
+  orderId: number,
+  reason: string,
+): Promise<ActionResult> {
+  const auth = await assertCashierOrAdmin();
+  if (!auth.ok) return auth;
+  const { user, store } = auth;
+  if (!Number.isInteger(orderId) || orderId <= 0) {
+    return { ok: false, error: "Tagihan tidak valid." };
+  }
+  const cleanReason = reason.trim().slice(0, 160);
+  if (cleanReason.length < 3) {
+    return { ok: false, error: "Alasan pembatalan minimal 3 karakter." };
+  }
+
+  const result = await db.transaction(async (tx) => {
+    const found = await tx
+      .select()
+      .from(orders)
+      .where(and(eq(orders.id, orderId), eq(orders.storeId, store.id)))
+      .for("update");
+    const order = found[0];
+    if (!order) return { ok: false as const, error: "Tagihan tidak ditemukan." };
+    if (order.status !== "open") {
+      return { ok: false as const, error: "Hanya tagihan terbuka yang bisa dibatalkan." };
+    }
+
+    const items = await tx.select().from(orderItems).where(eq(orderItems.orderId, order.id));
+    await restoreForRefund(tx, {
+      storeId: store.id,
+      userId: user.id,
+      orderId: order.id,
+      items: items
+        .filter((item) => item.qty > 0)
+        .map((item) => ({ productId: item.productId, name: item.name, qty: item.qty })),
+      reason: `Void tagihan ${order.number}: ${cleanReason}`,
+      createdAt: new Date(),
+    });
+
+    await tx
+      .update(orders)
+      .set({
+        status: "cancelled",
+        kitchenStatus: "served",
+        note: `Dibatalkan: ${cleanReason}`,
+      })
+      .where(eq(orders.id, order.id));
+
+    return { ok: true as const };
+  });
+
+  if (result.ok) {
+    revalidatePath("/tables");
+    revalidatePath("/kds");
+    revalidatePath("/orders");
+    revalidatePath("/inventory");
+  }
   return result;
 }

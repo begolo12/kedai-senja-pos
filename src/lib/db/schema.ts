@@ -18,6 +18,7 @@ export const stores = pgTable("stores", {
   address: text("address").notNull().default(""),
   phone: text("phone").notNull().default(""),
   currency: text("currency").notNull().default("IDR"),
+  serviceChargeRate: integer("service_charge_rate").notNull().default(0),
   taxRate: integer("tax_rate").notNull().default(1100),
   receiptWidth: text("receipt_width", { enum: ["58", "80"] })
     .notNull()
@@ -41,7 +42,7 @@ export const users = pgTable("users", {
   name: text("name").notNull(),
   username: text("username").notNull().unique(),
   pinHash: text("pin_hash").notNull(),
-  role: text("role", { enum: ["admin", "cashier"] })
+  role: text("role", { enum: ["admin", "cashier", "kitchen"] })
     .notNull()
     .default("cashier"),
   active: boolean("active").notNull().default(true),
@@ -72,6 +73,9 @@ export const categories = pgTable(
       .references(() => stores.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     color: text("color").notNull().default("#8a6f4a"),
+    station: text("station", { enum: ["bar", "kitchen"] })
+      .notNull()
+      .default("bar"),
     sortOrder: integer("sort_order").notNull().default(0),
   },
   (t) => [uniqueIndex("categories_store_name_idx").on(t.storeId, t.name)],
@@ -212,6 +216,9 @@ export const orders = pgTable(
     discountAmount: bigint("discount_amount", { mode: "number" })
       .notNull()
       .default(0),
+    serviceChargeAmount: bigint("service_charge_amount", { mode: "number" })
+      .notNull()
+      .default(0),
     taxAmount: bigint("tax_amount", { mode: "number" }).notNull().default(0),
     total: bigint("total", { mode: "number" }).notNull(),
     costTotal: bigint("cost_total", { mode: "number" }).notNull().default(0),
@@ -237,7 +244,7 @@ export const orders = pgTable(
     amountPaid: bigint("amount_paid", { mode: "number" }),
     changeDue: bigint("change_due", { mode: "number" }).notNull().default(0),
     status: text("status", {
-      enum: ["open", "completed", "refunded", "partially_refunded", "merged"],
+      enum: ["open", "completed", "refunded", "partially_refunded", "merged", "cancelled"],
     })
       .notNull()
       .default("completed"),

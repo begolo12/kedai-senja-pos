@@ -23,6 +23,7 @@ export async function updateSettingsAction(input: unknown): Promise<ActionResult
       name: data.storeName,
       address: data.address,
       phone: data.phone,
+      serviceChargeRate: data.serviceChargeRate,
       taxRate: data.taxRate,
       receiptWidth: data.receiptWidth,
       qrisPayload: data.qrisPayload,

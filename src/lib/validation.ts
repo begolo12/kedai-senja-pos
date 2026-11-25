@@ -44,6 +44,7 @@ export const categorySchema = z.object({
     .string()
     .trim()
     .regex(/^#[0-9a-fA-F]{6}$/, "Warna harus format #rrggbb."),
+  station: z.enum(["bar", "kitchen"]).default("bar"),
   sortOrder: z.number().int().min(0).max(999),
 });
 
@@ -197,6 +198,7 @@ export const settingsSchema = z.object({
   address: z.string().trim().max(200),
   phone: z.string().trim().max(40),
   currency: z.enum(["IDR"]),
+  serviceChargeRate: z.number().int().min(0).max(5000).default(0),
   taxRate: z.number().int().min(0).max(5000),
   receiptFooter: z.string().trim().max(200),
   receiptWidth: z.enum(["58", "80"]),
@@ -214,7 +216,7 @@ export const staffSchema = z.object({
     .min(3, "Username minimal 3 karakter.")
     .max(32)
     .regex(/^[a-z0-9._-]+$/, "Username: huruf kecil, angka, titik, garis."),
-  role: z.enum(["admin", "cashier"]),
+  role: z.enum(["admin", "cashier", "kitchen"]),
   pin: z
     .string()
     .trim()

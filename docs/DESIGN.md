@@ -1,50 +1,29 @@
-# Desain — Tera POS
+# Desain — Tera POS (Dark Roastery)
 
-Dokumen ini mencatat arah visual, token, state, dan keputusan interaksi.
-Rencana produk ada di `docs/PLAN.md`.
+Dokumen ini mencatat arah visual, token, state, dan keputusan interaksi untuk **Kopi Tera / Tera POS**.
 
-## 1. Arah: "Counter Ledger"
+## 1. Arah: "Dark Roastery"
 
-**Kategori:** perangkat kasir untuk warung, kafe, dan toko (satu lokasi).
-**Pengguna di layar pertama:** kasir berdiri, satu tangan di layar sentuh,
-satu tangan memegang produk; pelanggan menunggu.
-**Hal pertama yang harus terbaca:** total pesanan dan tombol bayar.
-**Benchmark:** Square/Toast (kecepatan, hierarki jelas) dan buku kas fisik
-(kepercayaan, jejak, tipografi angka).
-
-Arah yang dipertimbangkan:
-
-| Arah | Gagasan | Kenapa tidak dipilih |
-| --- | --- | --- |
-| SaaS biru default | Bersih, familiar, mengikuti template dashboard | Tidak membedakan apa pun; terlalu "produk software", bukan "meja kedai" |
-| Gelap neon | Kontras tinggi, terasa kafe malam | Sulit dibaca di ruang terang; aksen neon mengalahkan angka uang |
-| **Counter Ledger** | Kertas hangat, tinta, aksen oksida, serif untuk judul, mono untuk uang, garis putus-putus struk | Dipilih: cepat dipindai, terasa seperti alat kerja nyata, tidak generik |
-
-Prinsipnya: **satu layar, satu pekerjaan**. Katalog dan tiket tidak berebut;
-uang selalu mono dan tabular; warna hanya untuk status (oksida = aksi,
-hijau zaitun = data, merah = risiko).
-
-Yang sengaja dihindari: gradien, glassmorphism, sudut bulat besar, ikon
-emoji, ilustrasi dekoratif, kartu di dalam kartu, label berbahasa Inggris.
+**Kategori:** perangkat kasir untuk kafe, coffee bar, dan restoran hybrid (layanan meja + counter).
+**Pengguna di layar pertama:** kasir & barista berdiri di bar dengan pencahayaan hangat/redup; pelanggan menunggu di kasir atau meja.
+**Hal pertama yang harus terbaca:** total pesanan, modifier berbayar, dan tombol bayar/tagih meja.
 
 ## 2. Token
 
-Didefinisikan di `src/app/globals.css` (oklch, semantic).
+Didefinisikan di `src/app/globals.css` (oklch, semantic, `color-scheme: dark`).
 
 | Token | Nilai | Peran |
 | --- | --- | --- |
-| `--background` | `oklch(0.963 0.013 82)` | Kertas hangat |
-| `--foreground` | `oklch(0.235 0.014 55)` | Tinta |
-| `--card` | `oklch(0.988 0.007 82)` | Tiket / panel |
-| `--muted` | `oklch(0.928 0.014 82)` | Latar sekunder |
-| `--muted-foreground` | `oklch(0.49 0.018 62)` | Teks pendukung, lolos 4.5:1 |
-| `--border` | `oklch(0.865 0.017 82)` | Garis 1px |
-| `--primary` | `oklch(0.25 0.014 55)` | Tinta pekat / tombol utama |
-| `--signal` | `oklch(0.44 0.135 38)` | Aksen oksida; CTA dan angka risiko |
-| `--destructive` | `oklch(0.46 0.16 28)` | Refund, hapus, stok habis |
-| `--sidebar` | `oklch(0.225 0.013 55)` | Rel navigasi |
+| `--background` | `oklch(0.145 0.012 52)` | Roasted espresso gelap |
+| `--foreground` | `oklch(0.945 0.014 78)` | Warm crema |
+| `--card` | `oklch(0.185 0.014 52)` | Panel / kartu tiket |
+| `--muted-foreground` | `oklch(0.71 0.018 70)` | Teks pendukung, kontras tinggi |
+| `--border` | `oklch(0.285 0.016 55)` | Garis 1px |
+| `--signal` | `oklch(0.68 0.145 55)` | Tembaga / amber hangat (CTA & modifier aktif) |
+| `--signal-foreground` | `oklch(0.15 0.015 50)` | Tinta gelap di atas aksen amber |
+| `--destructive` | `oklch(0.62 0.18 25)` | Refund, void/batal, stok habis |
+| `--sidebar` | `oklch(0.115 0.010 50)` | Rel navigasi gelap |
 | `--radius` | `0.25rem` | Sudut nyaris kotak |
-| `--chart-1…5` | oksida, tinta, zaitun, gandum, baja | Grafik |
 
 Aksen digelapkan dari `oklch(0.6)` ke `oklch(0.44)` setelah pemeriksaan
 kontras otomatis: teks krem di atas oksida 0.6 hanya 3.97:1.

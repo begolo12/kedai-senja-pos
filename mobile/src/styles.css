@@ -1656,3 +1656,164 @@ h2 {
   box-shadow: 0 8px 24px rgba(28, 26, 23, 0.25);
   pointer-events: none;
 }
+
+
+/* ============================================================================
+   Dark Roastery Theme & Adaptive 3-Tier Scaling (Phone / Tablet / Windows)
+   ============================================================================ */
+:root {
+  --paper: #161310;
+  --paper-2: #1f1a16;
+  --card: #221d18;
+  --ink: #f2ebe0;
+  --muted: #aba092;
+  --line: #383028;
+  --oxide: #d9823b;
+  --oxide-ink: #1a140f;
+  --olive: #7ca37a;
+  --radius: 4px;
+  color-scheme: dark;
+}
+
+.topbar {
+  background: #100d0b;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink);
+}
+
+.login {
+  background: #0f0c0a;
+  color: var(--ink);
+}
+
+.login-hero {
+  border-right: 1px solid var(--line);
+}
+
+.chip.active {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #161310;
+  font-weight: 600;
+}
+
+.toast {
+  background: #100d0b;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.shell,
+.content,
+.pos,
+.catalog,
+.ticket {
+  min-width: 0;
+}
+
+.voucher-row input,
+.points-row input,
+.customer-search,
+.cash input,
+.modal input,
+.ticket input {
+  background: var(--paper-2);
+  color: var(--ink);
+}
+
+.receipt-preview {
+  background: #fffdf8;
+  color: #1e1b16;
+  padding: 12px;
+  border-radius: var(--radius);
+}
+
+/* Tier 1: Phone (< 640px) — Ringkas, 2 kolom padat, bottom-nav + cartbar */
+@media (max-width: 639px) {
+  .topbar {
+    padding: 10px 12px;
+    padding-top: max(10px, env(safe-area-inset-top));
+    gap: 8px;
+  }
+  .brand strong {
+    font-size: 19px;
+  }
+  .brand .eyebrow {
+    display: none;
+  }
+  .status .pill:not(.online):not(.offline) {
+    display: none;
+  }
+  .topbar-actions {
+    display: none;
+  }
+  .content {
+    padding: 10px 10px calc(132px + env(safe-area-inset-bottom));
+  }
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+  }
+  .card {
+    padding: 10px !important;
+    min-height: 92px !important;
+  }
+  .card-title {
+    font-size: 13px !important;
+  }
+  .bottom-nav {
+    display: flex;
+  }
+}
+
+/* Tier 2: Tablet (640px - 1099px) — 3 kolom katalog; >= 820px split-view dengan tiket */
+@media (min-width: 640px) and (max-width: 1099px) {
+  .content {
+    padding: 14px 16px;
+  }
+  .grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+  }
+}
+
+@media (min-width: 820px) {
+  .pos {
+    grid-template-columns: minmax(0, 1fr) 330px !important;
+    gap: 16px !important;
+  }
+  .ticket {
+    position: sticky !important;
+    top: 76px !important;
+    display: flex !important;
+    max-height: calc(100dvh - 92px) !important;
+    transform: none !important;
+  }
+  .cartbar,
+  .bottom-nav,
+  .ticket .ghost[aria-label="Tutup keranjang"] {
+    display: none !important;
+  }
+  .topbar-actions {
+    display: flex !important;
+  }
+}
+
+/* Tier 3: Windows / Desktop (>= 1100px) — Workspace lebar 4 kolom + panel tiket 380px */
+@media (min-width: 1100px) {
+  .content {
+    max-width: 1440px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 18px 24px;
+  }
+  .pos {
+    grid-template-columns: minmax(0, 1fr) 380px !important;
+    gap: 20px !important;
+  }
+  .grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 12px !important;
+  }
+}

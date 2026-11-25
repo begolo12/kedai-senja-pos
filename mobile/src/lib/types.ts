@@ -1,4 +1,4 @@
-export type Role = "admin" | "cashier";
+export type Role = "admin" | "cashier" | "kitchen";
 
 export type MobileUser = { id: number; name: string; username: string; role: Role };
 
@@ -14,6 +14,7 @@ export type Settings = {
   address: string;
   phone: string;
   currency: string;
+  serviceChargeRate?: number;
   taxRate: number;
   receiptWidth: "58" | "80";
   qrisPayload: string;
@@ -92,9 +93,11 @@ export type PendingOrder = {
   items: OrderLine[];
   discountType: "amount" | "percent" | null;
   discountValue: number;
+  serviceChargeRate?: number;
   taxRate: number;
   subtotal: number;
   discountAmount: number;
+  serviceChargeAmount?: number;
   taxAmount: number;
   total: number;
   costTotal: number;

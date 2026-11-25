@@ -9,6 +9,7 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test src/lib/*.test.ts",
+    "test:e2e": "playwright test",
     "db:generate": "drizzle-kit generate",
     "db:reset": "rm -rf .pgdata",
     "db:dev": "tsx scripts/pg-dev.ts",
@@ -35,6 +36,7 @@
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.11",
     "@electric-sql/pglite-socket": "^0.2.14",
+    "@playwright/test": "^1.65.1",
     "@tailwindcss/turbopack": "^4",
     "@types/node": "^20",
     "@types/pg": "^8.23.1",

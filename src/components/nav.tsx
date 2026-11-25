@@ -20,21 +20,23 @@ import {
   Truck,
   UsersRound,
   UserRoundCog,
+  UtensilsCrossed,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+type Role = "admin" | "cashier" | "kitchen";
 
 type NavItem = {
   href: string;
   label: string;
   icon: typeof ShoppingBasket;
+  roles: Role[];
 };
 
 type NavGroup = {
   id: string;
   label: string;
   items: NavItem[];
-  /** false = hanya admin boleh melihat grup ini */
-  forCashier?: boolean;
 };
 
 const GROUPS: NavGroup[] = [
@@ -42,50 +44,47 @@ const GROUPS: NavGroup[] = [
     id: "operasional",
     label: "Operasional",
     items: [
-      { href: "/", label: "Ringkasan", icon: LayoutDashboard },
-      { href: "/pos", label: "Kasir", icon: ShoppingBasket },
-      { href: "/kds", label: "Dapur", icon: ChefHat },
-      { href: "/orders", label: "Pesanan", icon: ReceiptText },
+      { href: "/", label: "Ringkasan", icon: LayoutDashboard, roles: ["admin"] },
+      { href: "/pos", label: "Kasir", icon: ShoppingBasket, roles: ["admin", "cashier"] },
+      { href: "/tables", label: "Meja", icon: UtensilsCrossed, roles: ["admin", "cashier"] },
+      { href: "/kds", label: "Dapur", icon: ChefHat, roles: ["admin", "cashier", "kitchen"] },
+      { href: "/orders", label: "Pesanan", icon: ReceiptText, roles: ["admin", "cashier"] },
     ],
   },
   {
     id: "katalog",
     label: "Katalog & stok",
     items: [
-      { href: "/products", label: "Produk", icon: Package },
-      { href: "/inventory", label: "Stok", icon: Boxes },
-      { href: "/purchases", label: "Pembelian", icon: Truck },
+      { href: "/products", label: "Produk", icon: Package, roles: ["admin"] },
+      { href: "/inventory", label: "Stok", icon: Boxes, roles: ["admin"] },
+      { href: "/purchases", label: "Pembelian", icon: Truck, roles: ["admin"] },
     ],
-    forCashier: false,
   },
   {
     id: "pelanggan",
     label: "Pelanggan & promo",
     items: [
-      { href: "/customers", label: "Pelanggan", icon: UsersRound },
-      { href: "/tiers", label: "Membership", icon: Crown },
-      { href: "/vouchers", label: "Promo", icon: TicketPercent },
+      { href: "/customers", label: "Pelanggan", icon: UsersRound, roles: ["admin"] },
+      { href: "/tiers", label: "Membership", icon: Crown, roles: ["admin"] },
+      { href: "/vouchers", label: "Promo", icon: TicketPercent, roles: ["admin"] },
     ],
-    forCashier: false,
   },
   {
     id: "wawasan",
     label: "Wawasan",
     items: [
-      { href: "/reports", label: "Laporan", icon: ChartNoAxesColumn },
-      { href: "/shift", label: "Shift", icon: Clock },
+      { href: "/reports", label: "Laporan", icon: ChartNoAxesColumn, roles: ["admin"] },
+      { href: "/shift", label: "Shift", icon: Clock, roles: ["admin", "cashier"] },
     ],
   },
   {
     id: "toko",
     label: "Toko",
     items: [
-      { href: "/tables", label: "Meja", icon: Store },
-      { href: "/stores", label: "Cabang", icon: Store },
-      { href: "/staff", label: "Staf", icon: UserRoundCog },
-      { href: "/settings", label: "Pengaturan", icon: Settings },
+      { href: "/stores", label: "Cabang", icon: Store, roles: ["admin"] },
+      { href: "/staff", label: "Staf", icon: UserRoundCog, roles: ["admin"] },
+      { href: "/settings", label: "Pengaturan", icon: Settings, roles: ["admin"] },
     ],
-    forCashier: false,
   },
 ];
 
@@ -100,11 +99,14 @@ export function SidebarNav({
   role,
   onNavigate,
 }: {
-  role: "admin" | "cashier";
+  role: Role;
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
-  const groups = GROUPS.filter((group) => role === "admin" || group.forCashier !== false);
+  const groups = GROUPS.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => item.roles.includes(role)),
+  })).filter((group) => group.items.length > 0);
 
   // Grup aktif selalu terbuka; status grup lain diingat di localStorage.
   const activeGroup = groups.find((group) =>

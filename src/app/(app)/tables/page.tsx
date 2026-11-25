@@ -3,23 +3,24 @@ import Link from "next/link";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { Clock, UtensilsCrossed } from "lucide-react";
 import { db } from "@/lib/db";
-import { customers, orderItems, orders, storeTables } from "@/lib/db/schema";
-import { requireAdmin } from "@/lib/auth";
+import { customers, orderItems, orders, products, storeTables } from "@/lib/db/schema";
+import { requireCashierOrAdmin } from "@/lib/auth";
 import { getSettings } from "@/lib/settings";
 import { formatMoney, formatTime } from "@/lib/money";
 import { PageHeader, SectionLabel } from "@/components/shared/page-header";
 import { TableDialog } from "@/components/tables/table-dialog";
 import { SettleDialog } from "@/components/tables/settle-dialog";
 import { MoveTableDialog, MergeOrdersDialog } from "@/components/tables/table-actions";
+import { AddItemsDialog, CancelOrderDialog } from "@/components/tables/open-order-actions";
 import { TableQr } from "@/components/tables/table-qr";
 
 export const metadata: Metadata = { title: "Meja" };
 
 export default async function TablesPage() {
-  const { store } = await requireAdmin();
+  const { user, store } = await requireCashierOrAdmin();
   const settings = await getSettings(store.id);
 
-  const [tableRows, openOrders, customerList] = await Promise.all([
+  const [tableRows, openOrders, customerList, activeProducts] = await Promise.all([
     db
       .select()
       .from(storeTables)
@@ -35,6 +36,17 @@ export default async function TablesPage() {
       .from(customers)
       .where(eq(customers.storeId, store.id))
       .orderBy(asc(customers.name)),
+    db
+      .select({
+        id: products.id,
+        name: products.name,
+        price: products.price,
+        stock: products.stock,
+        options: products.options,
+      })
+      .from(products)
+      .where(and(eq(products.storeId, store.id), eq(products.active, true)))
+      .orderBy(asc(products.name)),
   ]);
 
   const items = openOrders.length
@@ -75,7 +87,7 @@ export default async function TablesPage() {
         eyebrow={`Ruangan · ${store.name}`}
         title="Meja"
         description="Tagihan meja (bayar nanti), pindah/gabung pesanan, dan QR self-order per meja."
-        actions={<TableDialog />}
+        actions={user.role === "admin" ? <TableDialog /> : undefined}
       />
 
       <section className="grid gap-px border border-border bg-border sm:grid-cols-3">
@@ -105,7 +117,11 @@ export default async function TablesPage() {
                     <p className="flex items-center gap-1 text-[11px] text-muted-foreground">
                       <Clock className="size-3" />
                       {formatTime(order.createdAt)} ·{" "}
-                      {order.tableLabel ? `Meja ${order.tableLabel}` : "tanpa meja"}
+                      {order.tableLabel
+                        ? order.tableLabel.toLowerCase().startsWith("meja")
+                          ? order.tableLabel
+                          : `Meja ${order.tableLabel}`
+                        : "tanpa meja"}
                       {order.userId === null ? " · self-order" : ""}
                     </p>
                   </div>
@@ -139,6 +155,12 @@ export default async function TablesPage() {
                     currency={settings.currency}
                     customers={customerList}
                   />
+                  <AddItemsDialog
+                    orderId={order.id}
+                    orderNumber={order.number}
+                    products={activeProducts}
+                    currency={settings.currency}
+                  />
                   <MoveTableDialog
                     orderId={order.id}
                     number={order.number}
@@ -160,6 +182,7 @@ export default async function TablesPage() {
                       }))}
                     currency={settings.currency}
                   />
+                  <CancelOrderDialog orderId={order.id} orderNumber={order.number} />
                   <Link
                     href={`/kds`}
                     className="grid h-8 place-items-center border border-border px-2 text-[11px] text-muted-foreground hover:border-foreground hover:text-foreground"

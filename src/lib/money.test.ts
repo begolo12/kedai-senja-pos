@@ -10,9 +10,21 @@ test("subtotal, tax, and total use integer minor units", () => {
   assert.deepEqual(totals, {
     subtotal: 5_600_000,
     discountAmount: 0,
+    serviceChargeAmount: 0,
     taxAmount: 616_000,
     total: 6_216_000,
   });
+});
+
+test("service charge applies after discount and before PB1 tax", () => {
+  const totals = computeTotals([latte], {
+    serviceChargeRate: 500, // 5%
+    taxRate: 1000, // 10%
+  });
+  // subtotal 5.600.000 -> SC 5% = 280.000 -> taxable+SC = 5.880.000 -> PB1 10% = 588.000
+  assert.equal(totals.serviceChargeAmount, 280_000);
+  assert.equal(totals.taxAmount, 588_000);
+  assert.equal(totals.total, 6_468_000);
 });
 
 test("percent discount applies before tax and rounds once", () => {

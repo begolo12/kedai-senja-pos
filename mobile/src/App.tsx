@@ -22,6 +22,7 @@ import {
 } from "./lib/db";
 import { ApiError, sync, type LoginResult } from "./lib/api";
 import { computeTotals, formatMoney, formatTime } from "./lib/money";
+import { computeModifierDelta } from "./lib/modifiers";
 import { haptic } from "./lib/haptic";
 import { printOrder } from "./lib/thermal";
 import { clearSession, readSession, writeSession, type Session } from "./lib/storage";
@@ -342,7 +343,10 @@ export default function App() {
       }
     }
     const subtotal = cart.reduce(
-      (sum, line) => sum + line.product.price * line.qty,
+      (sum, line) =>
+        sum +
+        (line.product.price + computeModifierDelta(line.product.options, line.note)) *
+          line.qty,
       0,
     );
     const voucher = input.voucherCode
@@ -361,8 +365,13 @@ export default function App() {
       input.pointsRedeem * (data.settings.pointsValue ?? 0),
     );
     const totals = computeTotals(
-      cart.map((line) => ({ unitPrice: line.product.price, qty: line.qty })),
+      cart.map((line) => ({
+        unitPrice:
+          line.product.price + computeModifierDelta(line.product.options, line.note),
+        qty: line.qty,
+      })),
       {
+        serviceChargeRate: data.settings.serviceChargeRate ?? 0,
         taxRate: data.settings.taxRate,
         fixedDiscount: voucherAmount + redeemAmount,
       },
@@ -373,13 +382,15 @@ export default function App() {
         productId: line.product.id,
         name: line.product.name,
         sku: line.product.sku,
-        unitPrice: line.product.price,
+        unitPrice:
+          line.product.price + computeModifierDelta(line.product.options, line.note),
         cost: line.product.cost,
         qty: line.qty,
         note: line.note,
       })),
       discountType: null,
       discountValue: 0,
+      serviceChargeRate: data.settings.serviceChargeRate ?? 0,
       taxRate: data.settings.taxRate,
       ...totals,
       costTotal: cart.reduce((sum, line) => sum + line.product.cost * line.qty, 0),
@@ -699,6 +710,13 @@ function ReceiptOverlay({
               <span>{formatMoney(item.unitPrice * item.qty)}</span>
             </div>
           ))}
+          {(order.serviceChargeAmount ?? 0) > 0 ? (
+            <div className="sum">
+              <span>Service</span>
+              <span>{formatMoney(order.serviceChargeAmount ?? 0)}</span>
+            </div>
+          ) : null}
+          <div className="sum"><span>Pajak</span><span>{formatMoney(order.taxAmount)}</span></div>
           <div className="sum total"><span>Total</span><span>{formatMoney(order.total)}</span></div>
           <div className="sum"><span>Kembali</span><span>{formatMoney(order.changeDue)}</span></div>
         </div>

@@ -20,6 +20,19 @@ export function RevenueBars({
   data: RevenuePoint[];
   height?: number;
 }) {
+  if (data.length === 0 || data.every((point) => point.revenue === 0 && point.orders === 0)) {
+    return (
+      <div
+        style={{ height }}
+        className="flex w-full items-center justify-center border border-dashed border-border bg-muted/20 px-4 text-center"
+      >
+        <p className="text-xs text-muted-foreground">
+          Belum ada transaksi selesai pada rentang ini.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div style={{ height }} className="w-full">
       <ResponsiveContainer width="100%" height="100%">

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState,
 import { QRCodeSVG } from "qrcode.react";
 import { ArrowRight, Pause, ScanLine, ShoppingBag, TicketPercent, X } from "lucide-react";
 import { computeTotals, formatMoney, formatNumber, parseMoneyInput } from "../lib/money";
+import { computeModifierDelta, formatOptionChoice, parseOptions } from "../lib/modifiers";
 import { db } from "../lib/db";
 import { CameraScan, cameraScanSupported } from "../components/camera-scan";
 import type { Category, Customer, Product, Settings, Voucher } from "../lib/types";
@@ -90,7 +91,7 @@ export function PosScreen({
   );
   const [tableLabel, setTableLabel] = useState(restore?.tableLabel ?? "");
   const [optionProduct, setOptionProduct] = useState<Product | null>(null);
-  const [optionChoice, setOptionChoice] = useState("");
+  const [optionChoices, setOptionChoices] = useState<string[]>([]);
   const [optionNote, setOptionNote] = useState("");
   const [scanOpen, setScanOpen] = useState(false);
   const [customerId, setCustomerId] = useState<number | null>(
@@ -121,7 +122,7 @@ export function PosScreen({
     }
     if (optionProduct) {
       setOptionProduct(null);
-      setOptionChoice("");
+      setOptionChoices([]);
       setOptionNote("");
       return true;
     }
@@ -156,8 +157,11 @@ export function PosScreen({
     })();
   }, [customerId]);
 
+  const lineUnitPrice = (line: CartLine) =>
+    line.product.price + computeModifierDelta(line.product.options, line.note);
+
   const subtotal = cart.reduce(
-    (sum, line) => sum + line.product.price * line.qty,
+    (sum, line) => sum + lineUnitPrice(line) * line.qty,
     0,
   );
   const voucher = voucherCode
@@ -193,13 +197,18 @@ export function PosScreen({
   const totals = useMemo(
     () =>
       computeTotals(
-        cart.map((line) => ({ unitPrice: line.product.price, qty: line.qty })),
+        cart.map((line) => ({
+          unitPrice:
+            line.product.price + computeModifierDelta(line.product.options, line.note),
+          qty: line.qty,
+        })),
         {
+          serviceChargeRate: settings.serviceChargeRate ?? 0,
           taxRate: settings.taxRate,
           fixedDiscount: voucherAmount + redeemAmount,
         },
       ),
-    [cart, settings.taxRate, voucherAmount, redeemAmount],
+    [cart, settings.serviceChargeRate, settings.taxRate, voucherAmount, redeemAmount],
   );
   const count = cart.reduce((sum, line) => sum + line.qty, 0);
   const paid = method === "cash" ? parseMoneyInput(cash) : totals.total;
@@ -223,13 +232,10 @@ export function PosScreen({
   );
 
   function chooseProduct(product: Product) {
-    const choices = (product.options ?? "")
-      .split(/[,;]/)
-      .map((choice) => choice.trim())
-      .filter(Boolean);
+    const choices = parseOptions(product.options);
     if (choices.length > 0) {
       setOptionProduct(product);
-      setOptionChoice(choices[0]);
+      setOptionChoices([choices[0].label]);
       setOptionNote("");
       return;
     }
@@ -305,9 +311,10 @@ export function PosScreen({
 
   function addWithOptions() {
     if (!optionProduct) return;
-    const note = [optionChoice, optionNote.trim()].filter(Boolean).join(" · ");
+    const note = [...optionChoices, optionNote.trim()].filter(Boolean).join(" · ");
     onAdd(optionProduct, note);
     setOptionProduct(null);
+    setOptionChoices([]);
     setOptionNote("");
     setQuery("");
   }
@@ -512,7 +519,7 @@ export function PosScreen({
                     </button>
                   </div>
                 </div>
-                <b>{formatMoney(line.product.price * line.qty)}</b>
+                <b>{formatMoney(lineUnitPrice(line) * line.qty)}</b>
               </div>
             ))
           )}
@@ -580,6 +587,9 @@ export function PosScreen({
           ) : null}
           {redeemAmount > 0 ? (
             <div className="sum discount"><span>Tukar {pointsRedeem} poin</span><span>−{formatMoney(redeemAmount)}</span></div>
+          ) : null}
+          {(settings.serviceChargeRate ?? 0) > 0 ? (
+            <div className="sum"><span>Service {((settings.serviceChargeRate ?? 0) / 100).toLocaleString("id-ID")}%</span><span>{formatMoney(totals.serviceChargeAmount)}</span></div>
           ) : null}
           <div className="sum"><span>Pajak {(settings.taxRate / 100).toLocaleString("id-ID")}%</span><span>{formatMoney(totals.taxAmount)}</span></div>
           <div className="sum total"><span>Total</span><span>{formatMoney(totals.total)}</span></div>
@@ -772,34 +782,44 @@ export function PosScreen({
       {optionProduct ? (
         <div className="modal-backdrop" onClick={() => setOptionProduct(null)}>
           <div className="modal" onClick={(event) => event.stopPropagation()}>
-            <span className="eyebrow">Pilih varian</span>
+            <span className="eyebrow">Pilih modifier</span>
             <h2>{optionProduct.name}</h2>
             <div className="methods">
-              {(optionProduct.options ?? "")
-                .split(/[,;]/)
-                .map((choice) => choice.trim())
-                .filter(Boolean)
-                .map((choice) => (
+              {parseOptions(optionProduct.options).map((choice) => {
+                const selected = optionChoices.includes(choice.label);
+                return (
                   <button
-                    key={choice}
-                    className={optionChoice === choice ? "chip active" : "chip"}
-                    onClick={() => setOptionChoice(choice)}
+                    key={choice.label}
+                    className={selected ? "chip active" : "chip"}
+                    onClick={() =>
+                      setOptionChoices((prev) =>
+                        prev.includes(choice.label)
+                          ? prev.filter((item) => item !== choice.label)
+                          : [...prev, choice.label],
+                      )
+                    }
                   >
-                    {choice}
+                    {formatOptionChoice(choice, settings.currency)}
                   </button>
-                ))}
+                );
+              })}
             </div>
             <label className="cash">
               Catatan
               <input
                 value={optionNote}
                 onChange={(event) => setOptionNote(event.target.value)}
-                placeholder="mis. tanpa timun"
+                placeholder="mis. tanpa sedotan"
                 maxLength={100}
               />
             </label>
             <button className="primary" onClick={addWithOptions}>
-              Tambahkan · {formatMoney(optionProduct.price)}
+              Tambahkan ·{" "}
+              {formatMoney(
+                optionProduct.price +
+                  computeModifierDelta(optionProduct.options, optionChoices.join(" · ")),
+                settings.currency,
+              )}
             </button>
           </div>
         </div>

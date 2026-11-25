@@ -70,8 +70,12 @@ export default async function StaffPage() {
                 <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">@{staff.username}</td>
                 <td className="px-4 py-2.5">
                   <span className="stamp border-border text-muted-foreground">
-                    {staff.role === "admin" ? "Manajemen" : "Kasir"}
-                    {staff.role === "cashier" ? (
+                    {staff.role === "admin"
+                      ? "Manajemen"
+                      : staff.role === "kitchen"
+                        ? "Barista / Dapur"
+                        : "Kasir"}
+                    {staff.role !== "admin" ? (
                       <span className="ml-1 text-[10px] text-muted-foreground">
                         {allStores
                           .filter((store) => storesByUser.get(staff.id)?.includes(store.id))

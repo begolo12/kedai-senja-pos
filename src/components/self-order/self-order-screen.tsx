@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatMoney } from "@/lib/money";
+import { computeModifierDelta, formatOptionChoice, parseOptions } from "@/lib/modifiers";
 import { cn } from "@/lib/utils";
 
 export type SelfOrderProduct = {
@@ -41,7 +42,7 @@ export function SelfOrderScreen({
   const [lines, setLines] = useState<Line[]>([]);
   const [category, setCategory] = useState<number | "all">("all");
   const [optionProduct, setOptionProduct] = useState<SelfOrderProduct | null>(null);
-  const [optionChoice, setOptionChoice] = useState("");
+  const [optionChoices, setOptionChoices] = useState<string[]>([]);
   const [optionNote, setOptionNote] = useState("");
   const [pending, setPending] = useState(false);
   const [done, setDone] = useState<{ number: string; total: number } | null>(null);
@@ -54,7 +55,8 @@ export function SelfOrderScreen({
     [products, category],
   );
   const total = lines.reduce(
-    (sum, line) => sum + line.product.price * line.qty,
+    (sum, line) =>
+      sum + (line.product.price + computeModifierDelta(line.product.options, line.note)) * line.qty,
     0,
   );
   const count = lines.reduce((sum, line) => sum + line.qty, 0);
@@ -70,13 +72,10 @@ export function SelfOrderScreen({
   }
 
   function choose(product: SelfOrderProduct) {
-    const choices = (product.options ?? "")
-      .split(/[,;]/)
-      .map((choice) => choice.trim())
-      .filter(Boolean);
+    const choices = parseOptions(product.options);
     if (choices.length > 0) {
       setOptionProduct(product);
-      setOptionChoice(choices[0]);
+      setOptionChoices([choices[0].label]);
       setOptionNote("");
       return;
     }
@@ -263,42 +262,52 @@ export function SelfOrderScreen({
             </p>
             <h2 className="mb-3 font-serif text-2xl">{optionProduct.name}</h2>
             <div className="mb-3 flex flex-wrap gap-1.5">
-              {(optionProduct.options ?? "")
-                .split(/[,;]/)
-                .map((choice) => choice.trim())
-                .filter(Boolean)
-                .map((choice) => (
+              {parseOptions(optionProduct.options).map((choice) => {
+                const selected = optionChoices.includes(choice.label);
+                return (
                   <button
-                    key={choice}
+                    key={choice.label}
                     type="button"
-                    onClick={() => setOptionChoice(choice)}
+                    onClick={() =>
+                      setOptionChoices((prev) =>
+                        prev.includes(choice.label)
+                          ? prev.filter((item) => item !== choice.label)
+                          : [...prev, choice.label],
+                      )
+                    }
                     className={cn(
                       "border px-2.5 py-1.5 text-xs",
-                      optionChoice === choice
+                      selected
                         ? "border-foreground bg-foreground text-background"
                         : "border-border text-muted-foreground",
                     )}
                   >
-                    {choice}
+                    {formatOptionChoice(choice, currency)}
                   </button>
-                ))}
+                );
+              })}
             </div>
             <Input
               value={optionNote}
               onChange={(event) => setOptionNote(event.target.value)}
-              placeholder="Catatan (mis. tanpa timun)"
+              placeholder="Catatan (mis. tanpa sedotan)"
               maxLength={100}
               className="mb-3"
             />
             <Button
               onClick={() => {
-                const note = [optionChoice, optionNote.trim()].filter(Boolean).join(" · ");
+                const note = [...optionChoices, optionNote.trim()].filter(Boolean).join(" · ");
                 addLine(optionProduct, note);
                 setOptionProduct(null);
               }}
               className="w-full bg-signal text-signal-foreground hover:bg-signal/90"
             >
-              Tambahkan · {formatMoney(optionProduct.price, currency)}
+              Tambahkan ·{" "}
+              {formatMoney(
+                optionProduct.price +
+                  computeModifierDelta(optionProduct.options, optionChoices.join(" · ")),
+                currency,
+              )}
             </Button>
             <Button
               variant="ghost"
