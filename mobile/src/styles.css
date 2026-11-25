@@ -1659,49 +1659,173 @@ h2 {
 
 
 /* ============================================================================
-   Dark Roastery Theme & Adaptive 3-Tier Scaling (Phone / Tablet / Windows)
+   Semantic Light & Dark Roastery Themes + 3-Tier Adaptive Scaling
    ============================================================================ */
 :root {
+  --paper: #f7f3ea;
+  --paper-2: #efe9dc;
+  --card: #fffdf8;
+  --ink: #1c1a17;
+  --muted: #665d52;
+  --line: #ddd3c2;
+  --oxide: #9f3d1f;
+  --oxide-ink: #fff7ed;
+  --olive: #4d6b3c;
+  --note: #8a5a1e;
+  --chrome: #1c1a17;
+  --chrome-ink: #f3ecdf;
+  --chrome-muted: #b9ab99;
+  --chrome-line: #3a352e;
+  --chrome-active: #ffffff;
+  --chip-active-bg: #1c1a17;
+  --chip-active-ink: #f3ecdf;
+  --error-bg: rgba(159, 61, 31, 0.08);
+  --backdrop: rgba(20, 18, 15, 0.55);
+  --radius: 4px;
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
   --paper: #161310;
   --paper-2: #1f1a16;
   --card: #221d18;
   --ink: #f2ebe0;
-  --muted: #aba092;
-  --line: #383028;
+  --muted: #b5aa9c;
+  --line: #3a322a;
   --oxide: #d9823b;
   --oxide-ink: #1a140f;
   --olive: #7ca37a;
-  --radius: 4px;
+  --note: #e5b074;
+  --chrome: #100d0b;
+  --chrome-ink: #f2ebe0;
+  --chrome-muted: #a69b8d;
+  --chrome-line: #2e2721;
+  --chrome-active: #ffffff;
+  --chip-active-bg: #f2ebe0;
+  --chip-active-ink: #161310;
+  --error-bg: rgba(217, 130, 59, 0.14);
+  --backdrop: rgba(0, 0, 0, 0.72);
   color-scheme: dark;
 }
 
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #161310;
+    --paper-2: #1f1a16;
+    --card: #221d18;
+    --ink: #f2ebe0;
+    --muted: #b5aa9c;
+    --line: #3a322a;
+    --oxide: #d9823b;
+    --oxide-ink: #1a140f;
+    --olive: #7ca37a;
+    --note: #e5b074;
+    --chrome: #100d0b;
+    --chrome-ink: #f2ebe0;
+    --chrome-muted: #a69b8d;
+    --chrome-line: #2e2721;
+    --chrome-active: #ffffff;
+    --chip-active-bg: #f2ebe0;
+    --chip-active-ink: #161310;
+    --error-bg: rgba(217, 130, 59, 0.14);
+    --backdrop: rgba(0, 0, 0, 0.72);
+    color-scheme: dark;
+  }
+}
+
 .topbar {
-  background: #100d0b;
-  border-bottom: 1px solid var(--line);
-  color: var(--ink);
+  background: var(--chrome);
+  border-bottom: 1px solid var(--chrome-line);
+  color: var(--chrome-ink);
+}
+
+.brand-text small {
+  color: var(--chrome-muted);
+}
+
+.topbar-nav {
+  display: none;
+  align-items: center;
+  gap: 4px;
+  margin-right: 6px;
+}
+
+.topbar-nav button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 38px;
+  padding: 0 11px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--chrome-muted);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.topbar-nav button svg {
+  width: 15px;
+  height: 15px;
+}
+
+.topbar-nav button.active {
+  color: var(--chrome-active);
+  border-bottom-color: var(--oxide);
 }
 
 .login {
-  background: #0f0c0a;
-  color: var(--ink);
+  background: var(--chrome);
+  color: var(--chrome-ink);
 }
 
 .login-hero {
-  border-right: 1px solid var(--line);
+  border-right: 1px solid var(--chrome-line);
+}
+
+.bottom-nav {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  background: var(--chrome);
+  color: var(--chrome-muted);
+  border-top: 1px solid var(--chrome-line);
+}
+
+.bottom-nav button.active {
+  color: var(--chrome-active);
+}
+
+.cartbar {
+  background: var(--chrome);
+  color: var(--chrome-ink);
+  border: 1px solid var(--chrome-line);
+}
+
+.cartbar-info small {
+  color: var(--chrome-muted);
+}
+
+.queue,
+.nav-dot:not(:empty) {
+  background: var(--oxide);
+  color: var(--oxide-ink);
+  font-weight: 700;
 }
 
 .chip.active {
-  background: var(--ink);
-  border-color: var(--ink);
-  color: #161310;
+  background: var(--chip-active-bg);
+  border-color: var(--chip-active-bg);
+  color: var(--chip-active-ink);
   font-weight: 600;
 }
 
 .toast {
-  background: #100d0b;
-  border: 1px solid var(--line);
-  color: var(--ink);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  background: var(--chrome);
+  border: 1px solid var(--chrome-line);
+  color: var(--chrome-ink);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
 }
 
 .shell,
@@ -1712,6 +1836,21 @@ h2 {
   min-width: 0;
 }
 
+.search input,
+.order-type input,
+.cash input,
+.quick button,
+.parked-chip button,
+.customer-row,
+.customer-list > button,
+.voucher-row input,
+.points-row input,
+.customer-search,
+.modal input,
+.ticket input {
+  color: var(--ink);
+}
+
 .voucher-row input,
 .points-row input,
 .customer-search,
@@ -1719,101 +1858,164 @@ h2 {
 .modal input,
 .ticket input {
   background: var(--paper-2);
-  color: var(--ink);
+}
+
+.search input::placeholder,
+.order-type input::placeholder,
+.voucher-row input::placeholder,
+.points-row input::placeholder,
+.customer-search::placeholder,
+.cash input::placeholder {
+  color: var(--muted);
+}
+
+.line small.note,
+.note {
+  color: var(--note);
+}
+
+.stamp.pending {
+  border-color: var(--note);
+  color: var(--note);
+}
+
+.ghost.danger {
+  color: var(--oxide);
+  border-color: var(--oxide);
+}
+
+.error {
+  background: var(--error-bg);
+}
+
+.modal-backdrop,
+.sheet-backdrop {
+  background: var(--backdrop);
 }
 
 .receipt-preview {
   background: #fffdf8;
-  color: #1e1b16;
+  color: #1c1a17;
+  border-color: #ddd3c2;
   padding: 12px;
   border-radius: var(--radius);
+}
+
+.receipt-preview .sum {
+  color: #5c5349;
+}
+
+.receipt-preview .sum.total {
+  color: #1c1a17;
+  border-top-color: #ddd3c2;
+}
+
+.receipt-preview .line {
+  color: #1c1a17;
+  border-bottom-color: #ddd3c2;
+}
+
+.receipt-preview small {
+  color: #665d52;
 }
 
 /* Tier 1: Phone (< 640px) — Ringkas, 2 kolom padat, bottom-nav + cartbar */
 @media (max-width: 639px) {
   .topbar {
-    padding: 10px 12px;
-    padding-top: max(10px, env(safe-area-inset-top));
+    padding: 8px 10px;
+    padding-top: max(8px, env(safe-area-inset-top));
     gap: 8px;
+    min-height: 56px;
   }
-  .brand strong {
-    font-size: 19px;
+  .brand-text strong {
+    font-size: 15px;
   }
-  .brand .eyebrow {
-    display: none;
-  }
-  .status .pill:not(.online):not(.offline) {
+  .topbar-nav {
     display: none;
   }
   .topbar-actions {
-    display: none;
+    display: flex;
+    gap: 4px;
   }
-  .content {
-    padding: 10px 10px calc(132px + env(safe-area-inset-bottom));
+  .conn {
+    padding: 4px 6px;
   }
-  .grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-    gap: 8px !important;
+  .icon-btn {
+    width: 34px;
+    height: 34px;
   }
-  .card {
-    padding: 10px !important;
-    min-height: 92px !important;
+  .content.with-nav {
+    padding: 10px 10px calc(144px + env(safe-area-inset-bottom));
   }
-  .card-title {
-    font-size: 13px !important;
+  .product-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .product {
+    padding: 11px 10px 10px;
+    min-height: 108px;
+    gap: 10px;
+  }
+  .product-name {
+    font-size: 13px;
   }
   .bottom-nav {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
   }
 }
 
 /* Tier 2: Tablet (640px - 1099px) — 3 kolom katalog; >= 820px split-view dengan tiket */
 @media (min-width: 640px) and (max-width: 1099px) {
-  .content {
-    padding: 14px 16px;
+  .content.with-nav {
+    padding: 14px 16px calc(144px + env(safe-area-inset-bottom));
   }
-  .grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-    gap: 10px !important;
+  .product-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
   }
 }
 
 @media (min-width: 820px) {
   .pos {
-    grid-template-columns: minmax(0, 1fr) 330px !important;
-    gap: 16px !important;
+    grid-template-columns: minmax(0, 1fr) 330px;
+    gap: 16px;
   }
   .ticket {
-    position: sticky !important;
-    top: 76px !important;
-    display: flex !important;
-    max-height: calc(100dvh - 92px) !important;
-    transform: none !important;
+    display: flex;
+    flex-direction: column;
+    position: sticky;
+    top: 76px;
+    max-height: calc(100dvh - 96px);
+    border-radius: 6px;
   }
   .cartbar,
   .bottom-nav,
   .ticket .ghost[aria-label="Tutup keranjang"] {
-    display: none !important;
+    display: none;
   }
-  .topbar-actions {
-    display: flex !important;
+  .topbar-nav {
+    display: flex;
+  }
+  .content.with-nav {
+    padding-bottom: 24px;
   }
 }
 
 /* Tier 3: Windows / Desktop (>= 1100px) — Workspace lebar 4 kolom + panel tiket 380px */
 @media (min-width: 1100px) {
-  .content {
+  .content.with-nav {
     max-width: 1440px;
     width: 100%;
     margin: 0 auto;
-    padding: 18px 24px;
+    padding: 18px 24px 28px;
   }
   .pos {
-    grid-template-columns: minmax(0, 1fr) 380px !important;
-    gap: 20px !important;
+    grid-template-columns: minmax(0, 1fr) 380px;
+    gap: 20px;
   }
-  .grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
-    gap: 12px !important;
+  .product-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
   }
 }

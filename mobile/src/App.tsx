@@ -3,9 +3,11 @@ import { App as CapApp } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
 import {
   LayoutGrid,
+  Moon,
   ReceiptText,
   RefreshCw,
   Settings as SettingsIcon,
+  Sun,
   Wifi,
   WifiOff,
 } from "lucide-react";
@@ -26,6 +28,12 @@ import { computeModifierDelta } from "./lib/modifiers";
 import { haptic } from "./lib/haptic";
 import { printOrder } from "./lib/thermal";
 import { clearSession, readSession, writeSession, type Session } from "./lib/storage";
+import {
+  getEffectiveTheme,
+  getThemeMode,
+  setThemeMode,
+  type ThemeMode,
+} from "./lib/theme";
 import { checkForUpdate, downloadAndInstall, APP_VERSION, type UpdateInfo } from "./lib/update";
 import type {
   Category,
@@ -88,6 +96,13 @@ export default function App() {
   const [syncing, setSyncing] = useState(false);
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [themeMode, setThemeModeState] = useState<ThemeMode>(() => getThemeMode());
+
+  const effectiveTheme = getEffectiveTheme(themeMode);
+  function updateTheme(next: ThemeMode) {
+    setThemeMode(next);
+    setThemeModeState(next);
+  }
   const [expired, setExpired] = useState(false);
   const [cart, setCart] = useState<CartLine[]>([]);
   const [parked, setParked] = useState<ParkedTicket[]>([]);
@@ -515,12 +530,52 @@ export default function App() {
             <small>Kasir · {session.user.name.split(" ")[0]}</small>
           </div>
         </div>
+        <nav className="topbar-nav" aria-label="Navigasi desktop">
+          <button
+            type="button"
+            className={view === "pos" || view === null ? "active" : ""}
+            onClick={() => {
+              setView("pos");
+              setRestore(null);
+            }}
+          >
+            <LayoutGrid />
+            Kasir
+          </button>
+          <button
+            type="button"
+            className={view === "history" ? "active" : ""}
+            onClick={() => void openHistory()}
+          >
+            <ReceiptText />
+            Riwayat
+            {pending > 0 ? <span className="queue">{pending}</span> : null}
+          </button>
+          <button
+            type="button"
+            className={view === "settings" ? "active" : ""}
+            onClick={() => setView("settings")}
+          >
+            <SettingsIcon />
+            Pengaturan
+            {update ? <span className="queue">!</span> : null}
+          </button>
+        </nav>
         <div className="topbar-actions">
           <span className={online ? "conn online" : "conn offline"}>
             {online ? <Wifi className="size-3.5" /> : <WifiOff className="size-3.5" />}
             {online ? "Online" : "Offline"}
           </span>
           {pending > 0 ? <span className="queue">{pending}</span> : null}
+          <button
+            type="button"
+            className="icon-btn"
+            onClick={() => updateTheme(effectiveTheme === "dark" ? "light" : "dark")}
+            aria-label={effectiveTheme === "dark" ? "Ganti ke mode terang" : "Ganti ke mode gelap"}
+            title={effectiveTheme === "dark" ? "Mode Terang" : "Mode Gelap"}
+          >
+            {effectiveTheme === "dark" ? <Sun /> : <Moon />}
+          </button>
           <button
             type="button"
             className="icon-btn"
@@ -656,6 +711,8 @@ export default function App() {
           version={APP_VERSION}
           update={update}
           downloading={downloading}
+          themeMode={themeMode}
+          onThemeChange={updateTheme}
           onSync={() => void syncNow()}
           onCheckUpdate={() =>
             checkForUpdate()
@@ -785,6 +842,8 @@ function SettingsOverlay({
   version,
   update,
   downloading,
+  themeMode,
+  onThemeChange,
   onSync,
   onCheckUpdate,
   onInstall,
@@ -801,6 +860,8 @@ function SettingsOverlay({
   version: string;
   update: UpdateInfo | null;
   downloading: number | null;
+  themeMode: ThemeMode;
+  onThemeChange: (mode: ThemeMode) => void;
   onSync: () => void;
   onCheckUpdate: () => void;
   onInstall: () => void;
@@ -821,6 +882,29 @@ function SettingsOverlay({
             <strong>{session.user.name}</strong>
             <p className="hint">@{session.user.username} · {session.user.role === "admin" ? "Manajemen" : "Kasir"}</p>
             <p className="hint">Toko: {session.store.name}</p>
+          </div>
+
+          <div className="setting-card">
+            <span className="eyebrow">Tampilan</span>
+            <div className="methods">
+              {(
+                [
+                  ["system", "Otomatis"],
+                  ["light", "Terang"],
+                  ["dark", "Gelap"],
+                ] as const
+              ).map(([mode, label]) => (
+                <button
+                  key={mode}
+                  type="button"
+                  className={themeMode === mode ? "chip active" : "chip"}
+                  onClick={() => onThemeChange(mode)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <p className="hint">Ikuti tema perangkat atau pilih mode terang / gelap.</p>
           </div>
 
           <div className="setting-card">
