@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { LogIn } from "lucide-react";
 import { login, type LoginResult } from "../lib/api";
 
 export function LoginScreen({ onLogin }: { onLogin: (result: LoginResult) => void }) {
@@ -24,50 +25,58 @@ export function LoginScreen({ onLogin }: { onLogin: (result: LoginResult) => voi
   return (
     <div className="login">
       <div className="login-hero">
-        <span className="eyebrow">Tera POS · Point of sale</span>
+        <span className="hero-badge">Tera POS · Point of Sale</span>
         <h1>
           Antre boleh panjang.
           <br />
           <em>Semua tetap tertera.</em>
         </h1>
-        <p>Tablet kasir. Data tersimpan lokal, tersinkron saat online.</p>
+        <p>Kasir kafe cepat &amp; offline-first. Pesanan tersimpan lokal dan tersinkron otomatis saat online.</p>
       </div>
-      <form className="login-card" onSubmit={submit}>
-        <div className="login-brand">
-          <img src="/logo.jpg" alt="Logo Tera POS" className="login-logo" />
-          <strong>Tera POS</strong>
-        </div>
-        <span className="eyebrow">Masuk</span>
-        <h2>Selamat datang</h2>
-        <label>
-          ID Login
-          <input
-            value={username}
-            onChange={(event) => setUsername(event.target.value)}
-            autoCapitalize="none"
-            autoComplete="username"
-            required
-          />
-        </label>
-        <label>
-          PIN
-          <input
-            value={pin}
-            onChange={(event) => setPin(event.target.value.replace(/\D/g, "").slice(0, 8))}
-            type="password"
-            inputMode="numeric"
-            autoComplete="current-password"
-            required
-          />
-        </label>
-        {error ? <p className="error">{error}</p> : null}
-        <button className="primary" disabled={busy} type="submit">
-          {busy ? "Menghubungkan…" : "Masuk"}
-        </button>
-        <p className="hint">
-          Login pertama butuh internet. Setelah itu kasir tetap bisa dipakai offline.
-        </p>
-      </form>
+      <div className="login-wrap">
+        <form className="login-card" onSubmit={submit}>
+          <div className="login-brand">
+            <img src="/logo.jpg" alt="Logo Tera POS" className="login-logo" />
+            <div>
+              <strong>Tera POS</strong>
+              <small>Kasir Kafe</small>
+            </div>
+          </div>
+          <h2>Selamat datang</h2>
+          <p className="login-sub">Masuk dengan ID &amp; PIN staf untuk mulai berjualan.</p>
+          <label>
+            ID Login
+            <input
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+              placeholder="mis. kasir"
+              autoCapitalize="none"
+              autoComplete="username"
+              required
+            />
+          </label>
+          <label>
+            PIN
+            <input
+              value={pin}
+              onChange={(event) => setPin(event.target.value.replace(/\D/g, "").slice(0, 8))}
+              placeholder="••••••"
+              type="password"
+              inputMode="numeric"
+              autoComplete="current-password"
+              required
+            />
+          </label>
+          {error ? <p className="error">{error}</p> : null}
+          <button className="primary btn-with-icon" disabled={busy} type="submit">
+            <LogIn size={17} />
+            {busy ? "Menghubungkan…" : "Masuk"}
+          </button>
+          <p className="hint">
+            Login pertama butuh internet. Setelah itu kasir tetap bisa dipakai offline.
+          </p>
+        </form>
+      </div>
     </div>
   );
 }

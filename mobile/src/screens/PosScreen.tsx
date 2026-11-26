@@ -1,6 +1,24 @@
 import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref } from "react";
 import { QRCodeSVG } from "qrcode.react";
-import { ArrowRight, Pause, ScanLine, Search, ShoppingBag, TicketPercent, X } from "lucide-react";
+import {
+  ArrowRight,
+  ChevronRight,
+  Coffee,
+  CornerDownLeft,
+  Croissant,
+  CupSoda,
+  Flame,
+  Minus,
+  Pause,
+  Plus,
+  ScanLine,
+  Search,
+  ShoppingBag,
+  TicketPercent,
+  User,
+  UtensilsCrossed,
+  X,
+} from "lucide-react";
 import { computeTotals, formatMoney, formatNumber, parseMoneyInput } from "../lib/money";
 import { computeModifierDelta, formatOptionChoice, parseOptions } from "../lib/modifiers";
 import { db } from "../lib/db";
@@ -34,6 +52,22 @@ export type ParkedTicket = {
 export type PosScreenHandle = {
   closeTopDialog: () => boolean;
 };
+
+function CategoryGlyph({ name }: { name?: string }) {
+  if (name && /pastry|bakery|cake|roti|croissant/i.test(name)) {
+    return <Croissant size={17} strokeWidth={2} />;
+  }
+  if (name && /kitchen|brunch|food|makan|snack/i.test(name)) {
+    return <UtensilsCrossed size={17} strokeWidth={2} />;
+  }
+  if (name && /manual|brew|v60|filter/i.test(name)) {
+    return <Flame size={17} strokeWidth={2} />;
+  }
+  if (name && /non-coffee|tea|matcha|choco|signature/i.test(name)) {
+    return <CupSoda size={17} strokeWidth={2} />;
+  }
+  return <Coffee size={17} strokeWidth={2} />;
+}
 
 export function PosScreen({
   products,
@@ -371,7 +405,7 @@ export function PosScreen({
             <ScanLine size={16} />
           </button>
           <button type="submit" aria-label="Tambahkan hasil teratas">
-            ↵
+            <CornerDownLeft size={16} />
           </button>
         </form>
 
@@ -397,7 +431,8 @@ export function PosScreen({
         <div className="product-grid">
           {filtered.map((product) => {
             const inCart = cart.find((line) => line.product.id === product.id)?.qty ?? 0;
-            const tone = categories.find((item) => item.id === product.categoryId)?.color;
+            const cat = categories.find((item) => item.id === product.categoryId);
+            const tone = cat?.color ?? "var(--oxide)";
             return (
               <button
                 key={product.id}
@@ -405,19 +440,31 @@ export function PosScreen({
                 disabled={product.stock <= 0}
                 onClick={() => chooseProduct(product)}
               >
-                <span className="product-cat" style={{ background: tone ?? "var(--line)" }} />
-                <span className="product-name">
-                  {product.name}
-                  {product.options ? <em className="option-tag">Pilihan</em> : null}
+                <span className="product-top">
+                  <span
+                    className="product-glyph"
+                    style={{ color: tone, background: `${tone}1a` }}
+                    aria-hidden="true"
+                  >
+                    <CategoryGlyph name={cat?.name} />
+                  </span>
+                  {product.options ? <em className="option-tag">Opsi</em> : null}
                 </span>
+                <span className="product-name">{product.name}</span>
                 <span className="product-bottom">
                   <span>
                     <strong>{formatMoney(product.price)}</strong>
                     <small className={product.stock <= 5 ? "low" : ""}>
-                      {product.stock <= 0 ? "Habis" : `Sisa ${product.stock} ${product.unit}`}
+                      {product.stock <= 0 ? "Habis" : `Stok ${product.stock}`}
                     </small>
                   </span>
-                  {inCart > 0 ? <b className="count">{inCart}</b> : <span className="plus">+</span>}
+                  {inCart > 0 ? (
+                    <b className="count">{inCart}</b>
+                  ) : (
+                    <span className="plus" aria-hidden="true">
+                      <Plus size={15} strokeWidth={2.4} />
+                    </span>
+                  )}
                 </span>
               </button>
             );
@@ -430,14 +477,14 @@ export function PosScreen({
 
       <aside className={cartOpen ? "ticket open" : "ticket"}>
         <header className="ticket-head">
-          <div>
-            <span className="eyebrow">Tiket #{String(count).padStart(2, "0")}</span>
-            <h2>Pesanan baru</h2>
+          <div className="ticket-title">
+            <h2>Pesanan</h2>
+            <span className="ticket-num">#{String(count).padStart(2, "0")}</span>
           </div>
           <div className="ticket-head-actions">
             {cart.length > 0 ? (
               <button
-                className="ghost"
+                className="ghost icon-square"
                 onClick={() => {
                   setParkLabel(tableLabel || customer?.name || `Tiket ${parked.length + 1}`);
                   setParkOpen(true);
@@ -448,8 +495,12 @@ export function PosScreen({
                 <Pause size={16} />
               </button>
             ) : null}
-            <button className="ghost" onClick={() => setCartOpen(false)} aria-label="Tutup keranjang">
-              ×
+            <button
+              className="ghost icon-square"
+              onClick={() => setCartOpen(false)}
+              aria-label="Tutup keranjang"
+            >
+              <X size={16} />
             </button>
           </div>
         </header>
@@ -493,12 +544,14 @@ export function PosScreen({
         </div>
 
         <button className="customer-row" onClick={() => setCustomerOpen(true)}>
-          <span>{customer ? customer.name : "Pelanggan umum"}</span>
-          {customer ? (
-            <small className="hint">{customer.points} poin</small>
-          ) : (
-            <small className="hint">Pilih / buat baru</small>
-          )}
+          <span className="customer-row-main">
+            <User size={15} />
+            <span>{customer ? customer.name : "Pelanggan umum"}</span>
+          </span>
+          <small className="customer-row-sub">
+            {customer ? `${customer.points} poin` : "Pilih"}
+            <ChevronRight size={14} />
+          </small>
         </button>
 
         <div className="ticket-lines">
@@ -512,11 +565,15 @@ export function PosScreen({
                   <small>{formatMoney(line.product.price)}</small>
                   {line.note ? <small className="note">{line.note}</small> : null}
                   <div className="qty">
-                    <button onClick={() => onQty(line.id, line.qty - 1)}>−</button>
+                    <button onClick={() => onQty(line.id, line.qty - 1)} aria-label="Kurangi jumlah">
+                      <Minus size={14} />
+                    </button>
                     <span>{line.qty}</span>
-                    <button onClick={() => onQty(line.id, line.qty + 1)}>+</button>
-                    <button className="remove" onClick={() => onRemove(line.id)}>
-                      ×
+                    <button onClick={() => onQty(line.id, line.qty + 1)} aria-label="Tambah jumlah">
+                      <Plus size={14} />
+                    </button>
+                    <button className="remove" onClick={() => onRemove(line.id)} aria-label="Hapus item">
+                      <X size={14} />
                     </button>
                   </div>
                 </div>
@@ -624,8 +681,13 @@ export function PosScreen({
       {paymentOpen ? (
         <div className="modal-backdrop" onClick={() => setPaymentOpen(false)}>
           <div className="modal" onClick={(event) => event.stopPropagation()}>
-            <span className="eyebrow">Pembayaran</span>
-            <h2>{formatMoney(totals.total)}</h2>
+            <div className="modal-head">
+              <h2>Pembayaran</h2>
+              <button className="icon-btn" onClick={() => setPaymentOpen(false)} aria-label="Tutup pembayaran">
+                <X size={17} />
+              </button>
+            </div>
+            <div className="modal-total">{formatMoney(totals.total)}</div>
             <div className="methods">
               {(["cash", "qris", "card"] as const).map((item) => (
                 <button
@@ -655,7 +717,7 @@ export function PosScreen({
                     </button>
                   ))}
                 </div>
-                <div className="sum total">
+                <div className="change-banner">
                   <span>Kembalian</span>
                   <span className={change < 0 ? "error-text" : ""}>{formatMoney(Math.max(0, change))}</span>
                 </div>
@@ -686,7 +748,12 @@ export function PosScreen({
       {customerOpen ? (
         <div className="modal-backdrop" onClick={() => setCustomerOpen(false)}>
           <div className="modal" onClick={(event) => event.stopPropagation()}>
-            <span className="eyebrow">Pelanggan</span>
+            <div className="modal-head">
+              <h2>Pelanggan</h2>
+              <button className="icon-btn" onClick={() => setCustomerOpen(false)} aria-label="Tutup pelanggan">
+                <X size={17} />
+              </button>
+            </div>
             <input
               className="customer-search"
               value={customerQuery}
@@ -757,8 +824,13 @@ export function PosScreen({
       {parkOpen ? (
         <div className="modal-backdrop" onClick={() => setParkOpen(false)}>
           <form className="modal" onClick={(event) => event.stopPropagation()} onSubmit={submitPark}>
-            <span className="eyebrow">Tunda tiket</span>
-            <h2>{formatMoney(totals.total)}</h2>
+            <div className="modal-head">
+              <h2>Tunda tiket</h2>
+              <button type="button" className="icon-btn" onClick={() => setParkOpen(false)} aria-label="Tutup tunda tiket">
+                <X size={17} />
+              </button>
+            </div>
+            <div className="modal-total">{formatMoney(totals.total)}</div>
             <p className="hint">
               Tiket disimpan di tablet ini dan bisa diambil kapan saja — saat pelanggan
               kembali atau rombongan bergantian bayar.
@@ -783,8 +855,12 @@ export function PosScreen({
       {optionProduct ? (
         <div className="modal-backdrop" onClick={() => setOptionProduct(null)}>
           <div className="modal" onClick={(event) => event.stopPropagation()}>
-            <span className="eyebrow">Pilih modifier</span>
-            <h2>{optionProduct.name}</h2>
+            <div className="modal-head">
+              <h2>{optionProduct.name}</h2>
+              <button className="icon-btn" onClick={() => setOptionProduct(null)} aria-label="Tutup pilihan">
+                <X size={17} />
+              </button>
+            </div>
             <div className="methods">
               {parseOptions(optionProduct.options).map((choice) => {
                 const selected = optionChoices.includes(choice.label);

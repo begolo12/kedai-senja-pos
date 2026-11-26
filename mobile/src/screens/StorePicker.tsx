@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ArrowLeft, ChevronRight, Store } from "lucide-react";
 import { selectStore, type LoginResult } from "../lib/api";
 import type { Session } from "../lib/storage";
 
@@ -30,9 +31,8 @@ export function StorePicker({
   return (
     <div className="store-picker">
       <header className="store-head">
-        <span className="eyebrow">Masuk sebagai {login.user.name}</span>
         <h1>Pilih toko</h1>
-        <p>Kasir dan data akan mengikuti toko yang dipilih.</p>
+        <p>Masuk sebagai {login.user.name}. Kasir dan katalog mengikuti toko yang dipilih.</p>
       </header>
 
       {login.stores.length === 0 ? (
@@ -49,11 +49,15 @@ export function StorePicker({
               disabled={busy !== null}
               onClick={() => void pick(store.id)}
             >
-              <span className="eyebrow">{store.code}</span>
-              <strong>{store.name}</strong>
-              <small>{store.address || "Alamat belum diisi"}</small>
-              <span className="store-open">
-                {busy === store.id ? "Membuka…" : "Buka toko →"}
+              <span className="store-icon" aria-hidden="true">
+                <Store size={20} />
+              </span>
+              <span className="store-meta">
+                <strong>{store.name}</strong>
+                <small>{store.code}{store.address ? ` · ${store.address}` : ""}</small>
+              </span>
+              <span className="store-open" aria-hidden="true">
+                {busy === store.id ? "…" : <ChevronRight size={18} />}
               </span>
             </button>
           ))}
@@ -61,7 +65,8 @@ export function StorePicker({
       )}
 
       {error ? <p className="error">{error}</p> : null}
-      <button className="ghost picker-back" onClick={onCancel}>
+      <button className="ghost picker-back btn-with-icon" onClick={onCancel}>
+        <ArrowLeft size={16} />
         Kembali ke login
       </button>
     </div>

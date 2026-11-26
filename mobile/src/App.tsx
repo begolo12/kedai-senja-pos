@@ -8,8 +8,7 @@ import {
   RefreshCw,
   Settings as SettingsIcon,
   Sun,
-  Wifi,
-  WifiOff,
+  X,
 } from "lucide-react";
 import {
   getSetting,
@@ -563,7 +562,7 @@ export default function App() {
         </nav>
         <div className="topbar-actions">
           <span className={online ? "conn online" : "conn offline"}>
-            {online ? <Wifi className="size-3.5" /> : <WifiOff className="size-3.5" />}
+            <span className="conn-dot" aria-hidden="true" />
             {online ? "Online" : "Offline"}
           </span>
           {pending > 0 ? <span className="queue">{pending}</span> : null}
@@ -749,7 +748,7 @@ function ReceiptOverlay({
   return (
     <div className="modal-backdrop">
       <div className="modal receipt-modal">
-        <span className="eyebrow">Pembayaran diterima</span>
+        <span className="receipt-status">Pembayaran diterima</span>
         <h2>{formatMoney(order.total)}</h2>
         <p className="hint">
           {order.orderType === "takeaway" ? "Bungkus" : "Dine-in"}
@@ -803,7 +802,9 @@ function HistoryOverlay({
       <div className="sheet" onClick={(event) => event.stopPropagation()}>
         <header className="sheet-head">
           <h2>Riwayat lokal</h2>
-          <button className="ghost" onClick={onClose}>×</button>
+          <button className="icon-btn" onClick={onClose} aria-label="Tutup riwayat">
+            <X size={18} />
+          </button>
         </header>
         <div className="sheet-body">
           {orders.length === 0 ? <p className="hint">Belum ada pesanan di tablet ini.</p> : null}
@@ -874,18 +875,20 @@ function SettingsOverlay({
       <div className="sheet" onClick={(event) => event.stopPropagation()}>
         <header className="sheet-head">
           <h2>Pengaturan</h2>
-          <button className="ghost" onClick={onClose}>×</button>
+          <button className="icon-btn" onClick={onClose} aria-label="Tutup pengaturan">
+            <X size={18} />
+          </button>
         </header>
         <div className="sheet-body settings-body">
           <div className="setting-card">
-            <span className="eyebrow">Akun</span>
+            <span className="setting-label">Akun</span>
             <strong>{session.user.name}</strong>
             <p className="hint">@{session.user.username} · {session.user.role === "admin" ? "Manajemen" : "Kasir"}</p>
             <p className="hint">Toko: {session.store.name}</p>
           </div>
 
           <div className="setting-card">
-            <span className="eyebrow">Tampilan</span>
+            <span className="setting-label">Tampilan</span>
             <div className="methods">
               {(
                 [
@@ -908,7 +911,7 @@ function SettingsOverlay({
           </div>
 
           <div className="setting-card">
-            <span className="eyebrow">Sinkronisasi</span>
+            <span className="setting-label">Sinkronisasi</span>
             <div className="sum"><span>Status</span><span>{online ? "Online" : "Offline"}</span></div>
             <div className="sum"><span>Menunggu</span><span>{pending} pesanan</span></div>
             <div className="sum"><span>Terakhir</span><span>{lastSync ? formatTime(lastSync) : "Belum pernah"}</span></div>
@@ -922,7 +925,7 @@ function SettingsOverlay({
           </div>
 
           <div className="setting-card">
-            <span className="eyebrow">Printer</span>
+            <span className="setting-label">Printer</span>
             <p className="hint">
               {settings.receiptWidth} mm. Gunakan print service printer thermal yang terpasang
               di Android (Epson, Xprinter, RawBT, Mopria).
@@ -931,7 +934,7 @@ function SettingsOverlay({
           </div>
 
           <div className="setting-card">
-            <span className="eyebrow">Pembaruan</span>
+            <span className="setting-label">Pembaruan</span>
             <div className="sum"><span>Versi terpasang</span><span>{version}</span></div>
             <button className="ghost" onClick={onCheckUpdate}>Periksa GitHub</button>
             {update ? (
