@@ -10,6 +10,7 @@ import {
   type User,
 } from "./db/schema";
 import { readSession } from "./session";
+import { isUserExpired } from "./subscription";
 
 export type StoreContext = { user: User; store: Store };
 
@@ -22,7 +23,7 @@ export const getCurrentUser = cache(async (): Promise<User | null> => {
     .where(eq(users.id, session.userId))
     .limit(1);
   const user = found[0];
-  if (!user || !user.active) return null;
+  if (!user || !user.active || isUserExpired(user)) return null;
   return user;
 });
 
@@ -87,8 +88,24 @@ export const getStoreContext = cache(async (): Promise<{
   return { user, store };
 });
 
+export function isSuperAdmin(role: User["role"]): boolean {
+  return role === "admin";
+}
+
+export function isManager(role: User["role"]): boolean {
+  return role === "admin" || role === "owner";
+}
+
+export function roleLabel(role: User["role"]): string {
+  if (role === "admin") return "Admin Utama";
+  if (role === "owner") return "Pemilik";
+  if (role === "kitchen") return "Barista / Dapur";
+  return "Kasir";
+}
+
 export function defaultRouteForRole(role: User["role"]): string {
-  if (role === "admin") return "/";
+  if (role === "admin") return "/admin";
+  if (role === "owner") return "/";
   if (role === "kitchen") return "/kds";
   return "/pos";
 }
@@ -96,7 +113,9 @@ export function defaultRouteForRole(role: User["role"]): string {
 export async function requireStore(): Promise<StoreContext> {
   const context = await getStoreContext();
   if (!context) redirect("/login");
-  if (!context.store) redirect("/select-store");
+  if (!context.store) {
+    redirect(context.user.role === "admin" ? "/admin" : "/select-store");
+  }
   return { user: context.user, store: context.store };
 }
 
@@ -108,8 +127,15 @@ export async function requireCashierOrAdmin(): Promise<StoreContext> {
 
 export async function requireAdmin(): Promise<StoreContext> {
   const context = await requireStore();
-  if (context.user.role !== "admin") redirect(defaultRouteForRole(context.user.role));
+  if (!isManager(context.user.role)) redirect(defaultRouteForRole(context.user.role));
   return context;
+}
+
+export async function requireSuperAdmin(): Promise<{ user: User }> {
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
+  if (!isSuperAdmin(user.role)) redirect(defaultRouteForRole(user.role));
+  return { user };
 }
 
 /** For server actions: never redirect, return a typed failure instead. */
@@ -140,10 +166,21 @@ export async function assertAdmin(): Promise<
 > {
   const context = await assertStore();
   if (!context.ok) return context;
-  if (context.user.role !== "admin") {
+  if (!isManager(context.user.role)) {
     return { ok: false, error: "Hanya manajemen yang boleh melakukan ini." };
   }
   return context;
+}
+
+export async function assertSuperAdmin(): Promise<
+  { ok: true; user: User } | { ok: false; error: string }
+> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: "Sesi berakhir. Masuk ulang." };
+  if (!isSuperAdmin(user.role)) {
+    return { ok: false, error: "Hanya admin utama yang boleh mengelola akun." };
+  }
+  return { ok: true, user };
 }
 
 export type ActionResult = { ok: true } | { ok: false; error: string };

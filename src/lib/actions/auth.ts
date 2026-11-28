@@ -5,7 +5,8 @@ import { and, eq, gte, lt, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { loginAttempts, users } from "@/lib/db/schema";
 import { verifyPin } from "@/lib/pin";
-import { clearSession, writePending } from "@/lib/session";
+import { clearSession, writePending, writeSession } from "@/lib/session";
+import { formatExpiryDate, isUserExpired } from "@/lib/subscription";
 import { loginSchema } from "@/lib/validation";
 
 export type LoginState = { error?: string; username?: string };
@@ -69,7 +70,7 @@ export async function loginAction(
     .where(eq(users.username, username))
     .limit(1);
   const user = found[0];
-  if (!user || !user.active || !verifyPin(pin, user.pinHash)) {
+  if (!user || !verifyPin(pin, user.pinHash)) {
     const failures = await recentFailures(username, now).catch(() => 0);
     await recordFailure(username, now).catch(() => undefined);
     if (failures + 1 >= MAX_ATTEMPTS) {
@@ -79,11 +80,28 @@ export async function loginAction(
     return { error: "Username atau PIN salah.", username };
   }
 
+  if (!user.active) {
+    return { error: "Akun sedang dinonaktifkan. Hubungi admin.", username };
+  }
+
+  if (isUserExpired(user, now)) {
+    return {
+      error: `Masa aktif akun berakhir pada ${formatExpiryDate(user.expiresAt)}. Hubungi admin untuk perpanjangan.`,
+      username,
+    };
+  }
+
   attempts.delete(username);
   await db
     .insert(loginAttempts)
     .values({ username, success: true, createdAt: new Date(now) })
     .catch(() => undefined);
+
+  if (user.role === "admin") {
+    await writeSession(user.id);
+    redirect("/admin");
+  }
+
   await writePending(user.id);
   redirect("/select-store");
 }

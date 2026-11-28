@@ -4,15 +4,17 @@ async function loginAs(
   page: Page,
   username: string,
   pin: string,
-  storeMatch: string,
+  storeMatch?: string,
 ) {
   await page.goto("/login");
   await page.fill('input[name="username"]', username);
   await page.fill('input[name="pin"]', pin);
-  await page.click('button[type="submit"]');
-  await page.waitForURL("**/select-store");
-  await page.locator(`button:has-text("${storeMatch}")`).click();
-  await page.waitForURL((url) => !url.pathname.includes("/select-store"));
+  await page.getByRole("button", { name: "Masuk ke kasir" }).click();
+  if (storeMatch) {
+    await page.waitForURL("**/select-store");
+    await page.locator(`button:has-text("${storeMatch}")`).click();
+    await page.waitForURL((url) => !url.pathname.includes("/select-store"));
+  }
 }
 
 async function ensureShiftOpen(page: Page) {
@@ -30,20 +32,20 @@ async function ensureShiftOpen(page: Page) {
 }
 
 test.describe("Kopi Tera Café POS E2E Logic Flows", () => {
-  test("1. Auth & 3 Roles: cashier, kitchen (barista), and admin scoping", async ({
+  test("1. Auth & Roles: cashier, kitchen (barista), and demo owner scoping", async ({
     page,
   }) => {
     // Invalid PIN
     await page.goto("/login");
     await page.fill('input[name="username"]', "kasir");
     await page.fill('input[name="pin"]', "9999");
-    await page.click('button[type="submit"]');
+    await page.getByRole("button", { name: "Masuk ke kasir" }).click();
     await expect(page.getByText("Username atau PIN salah.")).toBeVisible();
 
-    // Cashier: only Kemang visible, lands on /pos, can open /tables & /orders (without Refund), blocked from /products
+    // Cashier: only Kemang visible, lands on /pos, can open /tables & /orders (without Refund), blocked from /products and /admin
     await page.fill('input[name="username"]', "kasir");
-    await page.fill('input[name="pin"]', "1111");
-    await page.click('button[type="submit"]');
+    await page.fill('input[name="pin"]', "123456");
+    await page.getByRole("button", { name: "Masuk ke kasir" }).click();
     await page.waitForURL("**/select-store");
     await expect(
       page.getByRole("heading", { name: "Kopi Tera — Kemang" }),
@@ -68,18 +70,22 @@ test.describe("Kopi Tera Café POS E2E Logic Flows", () => {
 
     await page.goto("/products");
     await expect(page).not.toHaveURL(/\/products$/);
+    await page.goto("/admin");
+    await expect(page).not.toHaveURL(/\/admin$/);
 
-    // Kitchen / Barista: clear cashier session first, then login -> lands on /kds, blocked from /pos
+    // Kitchen / Barista: clear cashier session first, then login -> lands on /kds, blocked from /pos & /admin
     await page.context().clearCookies();
     await loginAs(page, "barista", "2222", "Kemang");
     await page.waitForURL("**/kds");
     await expect(page.getByRole("heading", { name: "Dapur", exact: true })).toBeVisible();
     await page.goto("/pos");
     await expect(page).toHaveURL(/\/kds$/);
+    await page.goto("/admin");
+    await expect(page).toHaveURL(/\/kds$/);
   });
 
-  test("2. Admin shift open & petty cash expense calculation", async ({ page }) => {
-    await loginAs(page, "manajemen", "1234", "Kemang");
+  test("2. Demo owner shift open & petty cash expense calculation", async ({ page }) => {
+    await loginAs(page, "demo", "demo123", "Kemang");
     await page.waitForURL("**/");
     await expect(
       page.getByRole("heading", { name: "Ringkasan hari ini" }),
@@ -98,7 +104,7 @@ test.describe("Kopi Tera Café POS E2E Logic Flows", () => {
   test("3. POS checkout: paid modifiers, service charge, PB1, receipt & stock deduction", async ({
     page,
   }) => {
-    await loginAs(page, "manajemen", "1234", "Kemang");
+    await loginAs(page, "demo", "demo123", "Kemang");
     await ensureShiftOpen(page);
     await page.goto("/pos");
     await expect(page.locator('[data-hydrated="true"]')).toBeVisible();
@@ -164,7 +170,7 @@ test.describe("Kopi Tera Café POS E2E Logic Flows", () => {
   test("4. Dine-in Open Bill -> Add Item on /tables -> KDS Station Filter -> Settle", async ({
     page,
   }) => {
-    await loginAs(page, "manajemen", "1234", "Kemang");
+    await loginAs(page, "demo", "demo123", "Kemang");
     await ensureShiftOpen(page);
     await page.goto("/pos");
     await expect(page.locator('[data-hydrated="true"]')).toBeVisible();
@@ -212,7 +218,7 @@ test.describe("Kopi Tera Café POS E2E Logic Flows", () => {
   });
 
   test("5. Open Bill Void/Cancel restores product stock", async ({ page }) => {
-    await loginAs(page, "manajemen", "1234", "Kemang");
+    await loginAs(page, "demo", "demo123", "Kemang");
     await ensureShiftOpen(page);
     await page.goto("/pos");
     await expect(page.locator('[data-hydrated="true"]')).toBeVisible();
@@ -241,7 +247,7 @@ test.describe("Kopi Tera Café POS E2E Logic Flows", () => {
     ).toContainText(`Sisa ${beforeStock}`);
   });
 
-  test("6. Public Self-Order (/order/kemang) with paid modifier & Admin Refund", async ({
+  test("6. Public Self-Order (/order/kemang) with paid modifier & Manager Refund", async ({
     page,
   }) => {
     await page.goto("/order/kemang");
@@ -253,8 +259,8 @@ test.describe("Kopi Tera Café POS E2E Logic Flows", () => {
     await page.getByRole("button", { name: /Kirim pesanan/ }).click();
     await expect(page.getByRole("heading", { name: "Pesanan masuk" })).toBeVisible();
 
-    // Admin full refund from /orders
-    await loginAs(page, "manajemen", "1234", "Kemang");
+    // Manager full refund from /orders
+    await loginAs(page, "demo", "demo123", "Kemang");
     await page.goto("/orders");
     const firstCompletedRow = page.locator("tbody tr", { hasText: "Selesai" }).first();
     await expect(firstCompletedRow).toBeVisible();
@@ -270,7 +276,7 @@ test.describe("Kopi Tera Café POS E2E Logic Flows", () => {
   });
 
   test("7. Inventory stock adjustment & movement audit log", async ({ page }) => {
-    await loginAs(page, "manajemen", "1234", "Kemang");
+    await loginAs(page, "demo", "demo123", "Kemang");
     await page.goto("/inventory");
 
     const row = page.locator("tbody tr", { hasText: "Butter Croissant" }).first();
@@ -286,7 +292,7 @@ test.describe("Kopi Tera Café POS E2E Logic Flows", () => {
   });
 
   test("8. Voucher creation & redemption at POS checkout", async ({ page }) => {
-    await loginAs(page, "manajemen", "1234", "Kemang");
+    await loginAs(page, "demo", "demo123", "Kemang");
     await ensureShiftOpen(page);
     await page.goto("/vouchers");
 
@@ -312,7 +318,7 @@ test.describe("Kopi Tera Café POS E2E Logic Flows", () => {
   });
 
   test("9. Reports summary & CSV export endpoint", async ({ page }) => {
-    await loginAs(page, "manajemen", "1234", "Kemang");
+    await loginAs(page, "demo", "demo123", "Kemang");
     await page.goto("/reports");
     await expect(page.getByRole("heading", { name: "Laporan" })).toBeVisible();
 
@@ -322,13 +328,13 @@ test.describe("Kopi Tera Café POS E2E Logic Flows", () => {
     expect((await res.text()).length).toBeGreaterThan(10);
   });
 
-  test("10. Responsive zero-overflow & zero uncaught page errors across all 16 routes", async ({
+  test("10. Responsive zero-overflow & zero uncaught page errors across POS & Back Office routes", async ({
     page,
   }) => {
     const pageErrors: string[] = [];
     page.on("pageerror", (err) => pageErrors.push(err.message));
 
-    await loginAs(page, "manajemen", "1234", "Kemang");
+    await loginAs(page, "demo", "demo123", "Kemang");
     for (const route of [
       "/",
       "/pos",
@@ -341,7 +347,6 @@ test.describe("Kopi Tera Café POS E2E Logic Flows", () => {
       "/customers",
       "/tiers",
       "/vouchers",
-      "/staff",
       "/stores",
       "/settings",
       "/reports",
@@ -355,6 +360,139 @@ test.describe("Kopi Tera Café POS E2E Logic Flows", () => {
       );
       expect(overflow, `Mobile horizontal overflow on ${route}`).toBe(false);
     }
+
+    await page.context().clearCookies();
+    await loginAs(page, "admin", "admin123");
+    await page.waitForURL("**/admin");
+    for (const route of ["/admin", "/admin/accounts", "/admin/stores"]) {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.goto(route);
+      await page.waitForLoadState("load");
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth > window.innerWidth,
+      );
+      expect(overflow, `Mobile horizontal overflow on ${route}`).toBe(false);
+    }
+
     expect(pageErrors).toEqual([]);
+  });
+
+  test("11. Shared persistent Demo account, store lock, and Back Office isolation", async ({
+    page,
+  }) => {
+    await page.goto("/login");
+    await page.getByRole("button", { name: "Coba Akun Demo" }).click();
+    await page.waitForURL("**/select-store");
+    await expect(page.getByRole("heading", { name: "Kopi Tera — Kemang" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Kopi Tera — Senopati" })).toBeVisible();
+
+    await page.locator('button:has-text("Kemang")').click();
+    await page.waitForURL("**/");
+    await expect(page.getByText("Demo", { exact: true }).first()).toBeVisible();
+
+    // Demo can use POS management pages, but cannot create stores on /stores or open /admin
+    await page.goto("/stores");
+    await expect(page.getByRole("button", { name: "Toko baru" })).toHaveCount(0);
+
+    await page.goto("/customers");
+    await expect(page.getByRole("heading", { name: "Pelanggan", exact: true })).toBeVisible();
+
+    const demoCustomer = `Tamu Demo ${Date.now()}`;
+    await page.getByRole("button", { name: "Pelanggan baru" }).click();
+    const dialog = page.getByRole("dialog");
+    await dialog.locator("#c-name").fill(demoCustomer);
+    await dialog.getByRole("button", { name: "Tambah pelanggan" }).click();
+    await expect(page.getByText(demoCustomer)).toBeVisible();
+
+    await page.goto("/admin");
+    await expect(page).not.toHaveURL(/\/admin$/);
+
+    // Log out & log back in as demo -> data persists
+    await page.context().clearCookies();
+    await loginAs(page, "demo", "demo123", "Kemang");
+    await page.goto("/customers");
+    await expect(page.getByText(demoCustomer)).toBeVisible();
+  });
+
+  test("12. Admin Back Office: separate login, create ID with subscription, renew, and enforce expiry", async ({
+    page,
+  }) => {
+    // Admin lands directly on /admin (Back Office), NOT /select-store or /pos
+    await loginAs(page, "admin", "admin123");
+    await page.waitForURL("**/admin");
+    await expect(page.getByRole("heading", { name: "Pusat Kontrol Langganan" })).toBeVisible();
+
+    await page.goto("/admin/accounts");
+    await expect(page.getByRole("heading", { name: "Akun & Langganan" })).toBeVisible();
+
+    const suffix = String(Date.now()).slice(-6);
+    const newUsername = `teman${suffix}`;
+    const newStoreName = `Kedai Teman ${suffix}`;
+
+    await page.getByRole("button", { name: "Buat ID Baru" }).click();
+    const dialog = page.getByRole("dialog");
+    await dialog.locator("#s-name").fill(`Teman ${suffix}`);
+    await dialog.locator("#s-username").fill(newUsername);
+    await dialog.locator("#s-role").selectOption("owner");
+    await dialog.locator("#s-pin").fill("teman123");
+    await dialog.getByRole("button", { name: "3 Bln" }).click();
+    await dialog.locator("#s-note").fill("WA 081200001111");
+    await dialog.getByPlaceholder(/Nama toko baru/i).fill(newStoreName);
+    await dialog.getByRole("button", { name: "Tambah ID" }).click();
+
+    const row = page.locator("tbody tr", { hasText: `@${newUsername}` });
+    await expect(row).toBeVisible();
+    await expect(row).toContainText("Aktif");
+
+    // Admin extends subscription by +1 Tahun
+    await row.getByRole("button", { name: "Perpanjang" }).click();
+    const renewDialog = page.getByRole("dialog");
+    await renewDialog.getByRole("button", { name: "+1 Tahun" }).click();
+    await renewDialog.getByRole("button", { name: "Simpan Perpanjangan" }).click();
+    await expect(page.getByText(/diperpanjang hingga/)).toBeVisible();
+
+    // Admin manually expires the account to test enforcement
+    await row.getByRole("button", { name: "Perpanjang" }).click();
+    const expireDialog = page.getByRole("dialog");
+    await expireDialog.getByRole("button", { name: "Hentikan masa aktif sekarang" }).click();
+    await expireDialog.getByRole("button", { name: "Simpan Perpanjangan" }).click();
+    await expect(row).toContainText("Kedaluwarsa");
+
+    // Expired customer cannot log in
+    await page.context().clearCookies();
+    await page.goto("/login");
+    await page.fill('input[name="username"]', newUsername);
+    await page.fill('input[name="pin"]', "teman123");
+    await page.getByRole("button", { name: "Masuk ke kasir" }).click();
+    await expect(page.getByText(/Masa aktif akun berakhir/)).toBeVisible();
+
+    // Admin renews the expired account by +1 Bulan -> customer can log in again & open every POS feature
+    await loginAs(page, "admin", "admin123");
+    await page.waitForURL("**/admin");
+    await page.goto("/admin/accounts");
+    const expiredRow = page.locator("tbody tr", { hasText: `@${newUsername}` });
+    await expiredRow.getByRole("button", { name: "Perpanjang" }).click();
+    const reactivateDialog = page.getByRole("dialog");
+    await reactivateDialog.getByRole("button", { name: "+1 Bulan" }).click();
+    await reactivateDialog.getByRole("button", { name: "Simpan Perpanjangan" }).click();
+    await expect(expiredRow).toContainText("Aktif");
+
+    await page.context().clearCookies();
+    await loginAs(page, newUsername, "teman123", newStoreName);
+    await page.waitForURL("**/");
+
+    for (const route of ["/", "/pos", "/tables", "/orders", "/products", "/inventory", "/reports", "/shift", "/stores", "/settings"]) {
+      await page.goto(route);
+      await expect(page).toHaveURL(new RegExp(`${route === "/" ? "/$" : route}`));
+    }
+
+    await page.goto("/inventory");
+    await expect(page.getByRole("button", { name: "Sesuaikan" })).toHaveCount(0); // Empty newly-created store has 0 products yet, wait — page loads cleanly!
+    await page.goto("/shift");
+    await expect(page.getByRole("heading", { name: "Semua shift" })).toBeVisible();
+
+    // Owner is blocked from /admin Back Office
+    await page.goto("/admin");
+    await expect(page).not.toHaveURL(/\/admin$/);
   });
 });

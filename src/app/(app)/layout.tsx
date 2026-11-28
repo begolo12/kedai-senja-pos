@@ -1,24 +1,26 @@
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
 import { TeraMark } from "@/components/brand";
-import { requireStore } from "@/lib/auth";
+import { defaultRouteForRole, requireStore } from "@/lib/auth";
 import { getOpenShift } from "@/lib/shifts";
 import { getSettings } from "@/lib/settings";
 import { formatDate, formatMoney } from "@/lib/money";
+import { formatExpiryDate, getSubscriptionInfo } from "@/lib/subscription";
 import { SidebarNav } from "@/components/nav";
 import { MobileNav, UserMenu } from "@/components/user-menu";
 
 export default async function AppLayout({ children }: LayoutProps<"/">) {
   const { user, store } = await requireStore();
   const settings = await getSettings(store.id);
-  const canShift = user.role === "admin" || user.role === "cashier";
+  const canShift = user.role !== "kitchen";
   const shift = canShift ? await getOpenShift(user.id, store.id) : null;
+  const sub = getSubscriptionInfo(user);
 
   return (
     <div className="flex min-h-dvh flex-1 bg-background">
       <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground lg:flex">
         <div className="border-b border-sidebar-border px-5 py-6">
-          <Link href={user.role === "admin" ? "/" : user.role === "kitchen" ? "/kds" : "/pos"} className="block">
+          <Link href={defaultRouteForRole(user.role)} className="block">
             <span className="flex items-center gap-2 text-[10px] tracking-[0.22em] text-sidebar-foreground/70 uppercase">
               <TeraMark className="size-6 rounded-[3px] object-cover" />
               Tera POS
@@ -85,6 +87,17 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
+            {user.role === "admin" ? (
+              <Link
+                href="/admin"
+                className="stamp border-signal/50 text-signal hover:bg-signal/10"
+              >
+                Back Office
+              </Link>
+            ) : null}
+            {user.username === "demo" ? (
+              <span className="stamp border-signal/50 bg-signal/10 text-signal">Demo</span>
+            ) : null}
             {canShift ? (
               !shift ? (
                 <span className="stamp border-destructive/40 text-destructive">Shift tutup</span>
@@ -99,7 +112,15 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
           </div>
         </header>
 
-        <main className="flex-1 px-4 py-7 sm:px-6 lg:px-8">{children}</main>
+        <main className="flex-1 px-4 py-7 sm:px-6 lg:px-8">
+          {sub.status === "expiring" && sub.daysLeft !== null ? (
+            <div className="mx-auto mb-5 max-w-6xl border border-signal/40 bg-signal/10 px-4 py-2.5 text-xs text-foreground">
+              <span className="font-medium text-signal">Masa aktif hampir berakhir:</span>{" "}
+              tersisa {sub.daysLeft} hari (berakhir {formatExpiryDate(user.expiresAt)}). Hubungi admin untuk perpanjangan.
+            </div>
+          ) : null}
+          {children}
+        </main>
       </div>
     </div>
   );

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { expenses, shifts, users } from "@/lib/db/schema";
-import { requireCashierOrAdmin } from "@/lib/auth";
+import { isManager, requireCashierOrAdmin } from "@/lib/auth";
 import { getSettings } from "@/lib/settings";
 import { getOpenShift, getShiftSummary } from "@/lib/shifts";
 import { formatDateTime, formatMoney } from "@/lib/money";
@@ -51,7 +51,7 @@ export default async function ShiftPage() {
     .where(
       and(
         eq(shifts.storeId, store.id),
-        user.role === "admin" ? undefined : eq(shifts.userId, user.id),
+        isManager(user.role) ? undefined : eq(shifts.userId, user.id),
       ),
     )
     .orderBy(desc(shifts.openedAt))
@@ -197,7 +197,7 @@ export default async function ShiftPage() {
           <div>
             <SectionLabel>Riwayat</SectionLabel>
             <h2 className="font-serif text-2xl leading-none">
-              {user.role === "admin" ? "Semua shift" : "Shift saya"}
+              {isManager(user.role) ? "Semua shift" : "Shift saya"}
             </h2>
           </div>
           <p className="text-[11px] text-muted-foreground">12 terakhir</p>

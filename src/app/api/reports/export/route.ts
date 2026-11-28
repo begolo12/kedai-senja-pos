@@ -1,14 +1,14 @@
 import { and, asc, eq, gte, lt, ne, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { customers, orderItems, orders, users } from "@/lib/db/schema";
-import { getStoreContext } from "@/lib/auth";
+import { getStoreContext, isManager } from "@/lib/auth";
 import { readDateRange } from "@/lib/dates";
 import { toCsv } from "@/lib/csv";
 
 export async function GET(request: Request) {
   const context = await getStoreContext();
   if (!context) return new Response("Unauthorized", { status: 401 });
-  if (context.user.role !== "admin") return new Response("Forbidden", { status: 403 });
+  if (!isManager(context.user.role)) return new Response("Forbidden", { status: 403 });
   if (!context.store) return new Response("Pilih toko dulu", { status: 400 });
   const storeId = context.store.id;
 

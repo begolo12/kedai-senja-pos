@@ -5,8 +5,9 @@ import { ArrowRight, MapPin, Store as StoreIcon } from "lucide-react";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
-import { defaultRouteForRole, getAllowedStores } from "@/lib/auth";
+import { defaultRouteForRole, getAllowedStores, isManager, roleLabel } from "@/lib/auth";
 import { readPending, readSession } from "@/lib/session";
+import { isUserExpired } from "@/lib/subscription";
 import { chooseStoreAction } from "@/lib/actions/stores";
 import { logoutAction } from "@/lib/actions/auth";
 import { Button } from "@/components/ui/button";
@@ -29,7 +30,7 @@ export default async function SelectStorePage({
     .where(eq(users.id, userId))
     .limit(1);
   const user = found[0];
-  if (!user || !user.active) redirect("/login");
+  if (!user || !user.active || isUserExpired(user)) redirect("/login");
 
   const available = await getAllowedStores(user);
   const error = params.error === "1";
@@ -44,16 +45,11 @@ export default async function SelectStorePage({
             </p>
             <h1 className="mt-2 font-serif text-4xl leading-none">Pilih toko</h1>
             <p className="mt-2 text-sm text-sidebar-foreground/60">
-              {user.name} ·{" "}
-              {user.role === "admin"
-                ? "Manajemen"
-                : user.role === "kitchen"
-                  ? "Barista / Dapur"
-                  : "Kasir"}
+              {user.name} · {roleLabel(user.role)}
             </p>
           </div>
           <div className="flex items-center gap-2">
-            {user.role === "admin" ? (
+            {isManager(user.role) ? (
               <Button
                 nativeButton={false}
                 variant="outline"
@@ -90,9 +86,9 @@ export default async function SelectStorePage({
             <StoreIcon className="mx-auto size-6 text-muted-foreground" strokeWidth={1.4} />
             <h2 className="mt-3 font-serif text-2xl">Belum ada toko</h2>
             <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-              {user.role === "admin"
-                ? "Buat toko pertama lewat menu Toko."
-                : "Minta manajemen menugaskan akun ini ke minimal satu toko."}
+              {isManager(user.role)
+                ? "Buat toko pertama lewat menu Cabang."
+                : "Minta admin menugaskan akun ini ke minimal satu toko."}
             </p>
           </div>
         ) : (

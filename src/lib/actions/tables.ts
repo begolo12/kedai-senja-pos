@@ -13,7 +13,7 @@ import {
   storeTables,
 } from "@/lib/db/schema";
 import { assertAdmin, assertCashierOrAdmin, type ActionResult } from "@/lib/auth";
-import { createOpenOrderInTx, type OpenOrderResult } from "@/lib/open-order";
+import { createOpenOrderInTx, OpenOrderAbortError, type OpenOrderResult } from "@/lib/open-order";
 import { computeTotals } from "@/lib/money";
 import { computeModifierDelta } from "@/lib/modifiers";
 import { deductForSale, restoreForRefund } from "@/lib/recipes";
@@ -122,28 +122,36 @@ export async function createOpenOrderAction(input: unknown): Promise<OpenOrderRe
   )[0];
   if (!shift) return { ok: false, error: "Buka shift dulu sebelum transaksi." };
 
-  const result = await db.transaction(async (tx) => {
-    const existing = await tx
-      .select({ id: orders.id })
-      .from(orders)
-      .where(eq(orders.clientId, data.clientId as string))
-      .limit(1);
-    if (existing[0]) {
-      return { ok: true as const, orderId: existing[0].id, number: "", total: 0 };
-    }
-    return createOpenOrderInTx(tx, {
-      storeId: store.id,
-      userId: user.id,
-      shiftId: shift.id,
-      clientId: data.clientId as string,
-      tableId: typeof data.tableId === "number" ? data.tableId : null,
-      tableLabel: typeof data.tableLabel === "string" ? data.tableLabel.slice(0, 40) : null,
-      note: typeof data.note === "string" ? data.note.slice(0, 200) : null,
-      items: data.items as { productId: number; qty: number; note?: string }[],
-      serviceChargeRate: store.serviceChargeRate,
-      taxRate: store.taxRate,
+  let result: OpenOrderResult;
+  try {
+    result = await db.transaction(async (tx) => {
+      const existing = await tx
+        .select({ id: orders.id })
+        .from(orders)
+        .where(eq(orders.clientId, data.clientId as string))
+        .limit(1);
+      if (existing[0]) {
+        return { ok: true as const, orderId: existing[0].id, number: "", total: 0 };
+      }
+      return createOpenOrderInTx(tx, {
+        storeId: store.id,
+        userId: user.id,
+        shiftId: shift.id,
+        clientId: data.clientId as string,
+        tableId: typeof data.tableId === "number" ? data.tableId : null,
+        tableLabel: typeof data.tableLabel === "string" ? data.tableLabel.slice(0, 40) : null,
+        note: typeof data.note === "string" ? data.note.slice(0, 200) : null,
+        items: data.items as { productId: number; qty: number; note?: string }[],
+        serviceChargeRate: store.serviceChargeRate,
+        taxRate: store.taxRate,
+      });
     });
-  });
+  } catch (error) {
+    if (error instanceof OpenOrderAbortError) {
+      return { ok: false, error: error.message };
+    }
+    throw error;
+  }
 
   revalidatePath("/tables");
   revalidatePath("/kds");

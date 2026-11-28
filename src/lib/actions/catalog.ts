@@ -232,7 +232,7 @@ export async function importMenuAction(csv: string): Promise<ActionResult & { cr
 
     const price = parseMoneyInput(priceRaw);
     const cost = costRaw ? parseMoneyInput(costRaw) : 0;
-    const stock = Math.max(0, Number(stockRaw || 0));
+    const stock = Math.max(0, Math.floor(Number(stockRaw || 0)) || 0);
     const unit = unitRaw || "porsi";
     const options = optionsRaw ? optionsRaw.replaceAll(";", ",") : null;
 

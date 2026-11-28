@@ -57,14 +57,19 @@ function verify(value: string | undefined, scope: string, now = 0) {
   }
 }
 
-export function createSessionToken(userId: number, storeId: number, now = Date.now()) {
-  return token({ uid: userId, sid: storeId, exp: now + TTL_MS, scope: "session" });
+export function createSessionToken(userId: number, storeId?: number, now = Date.now()) {
+  return token({
+    uid: userId,
+    ...(storeId ? { sid: storeId } : {}),
+    exp: now + TTL_MS,
+    scope: "session",
+  });
 }
 
 export function readSessionToken(value: string | undefined, now = 0) {
   const data = verify(value, "session", now);
-  if (!data?.uid || !data.sid) return null;
-  return { userId: data.uid, storeId: data.sid };
+  if (!data?.uid) return null;
+  return { userId: data.uid, storeId: data.sid ?? null };
 }
 
 export function createPendingToken(userId: number, now = Date.now()) {
@@ -94,7 +99,7 @@ const cookieOptions = {
   path: "/",
 };
 
-export async function writeSession(userId: number, storeId: number) {
+export async function writeSession(userId: number, storeId?: number) {
   const store = await cookies();
   store.set(COOKIE, createSessionToken(userId, storeId), {
     ...cookieOptions,

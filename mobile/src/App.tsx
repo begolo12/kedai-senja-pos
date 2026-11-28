@@ -883,7 +883,7 @@ function SettingsOverlay({
           <div className="setting-card">
             <span className="setting-label">Akun</span>
             <strong>{session.user.name}</strong>
-            <p className="hint">@{session.user.username} · {session.user.role === "admin" ? "Manajemen" : "Kasir"}</p>
+            <p className="hint">@{session.user.username} · {session.user.role === "admin" ? "Admin Utama" : session.user.role === "owner" ? "Pemilik" : session.user.role === "kitchen" ? "Barista / Dapur" : "Kasir"}</p>
             <p className="hint">Toko: {session.store.name}</p>
           </div>
 

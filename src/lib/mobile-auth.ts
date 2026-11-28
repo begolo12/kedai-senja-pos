@@ -2,6 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "./db";
 import { stores, users, type Store, type User } from "./db/schema";
 import { readApiToken } from "./session";
+import { isUserExpired } from "./subscription";
 import { userCanUseStore } from "./auth";
 
 const DEFAULT_ORIGINS = [
@@ -56,7 +57,7 @@ export async function getMobileContext(
   ]);
   const user = userRows[0];
   const store = storeRows[0];
-  if (!user || !user.active || !store) return null;
+  if (!user || !user.active || isUserExpired(user) || !store) return null;
   if (!(await userCanUseStore(user, store.id))) return null;
   return { user, store };
 }

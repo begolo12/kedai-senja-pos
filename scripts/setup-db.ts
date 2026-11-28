@@ -1,13 +1,14 @@
 import path from "node:path";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { closeDb, db } from "../src/lib/db";
-import { seedIfEmpty } from "../src/lib/db/seed";
+import { ensureCoreAccounts, seedIfEmpty } from "../src/lib/db/seed";
 
 async function main() {
   const target = process.env.DATABASE_URL ? "DATABASE_URL" : "local PGlite";
   console.log(`Migrating ${target}…`);
   await migrate(db, { migrationsFolder: path.join(process.cwd(), "drizzle") });
   await seedIfEmpty(db);
+  await ensureCoreAccounts(db);
   console.log("Database ready.");
   await closeDb();
 }

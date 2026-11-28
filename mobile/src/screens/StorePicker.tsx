@@ -38,7 +38,7 @@ export function StorePicker({
       {login.stores.length === 0 ? (
         <div className="empty-store">
           <h2>Belum ada toko</h2>
-          <p>Minta manajemen menugaskan akun ini ke toko.</p>
+          <p>Minta admin menugaskan akun ini ke toko.</p>
         </div>
       ) : (
         <div className="store-grid">

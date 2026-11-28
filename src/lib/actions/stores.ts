@@ -4,9 +4,10 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { categories, products, stores, users } from "@/lib/db/schema";
-import { defaultRouteForRole, getCurrentUser, userCanUseStore } from "@/lib/auth";
+import { categories, products, stores, userStores, users } from "@/lib/db/schema";
+import { defaultRouteForRole, getCurrentUser, isManager, userCanUseStore } from "@/lib/auth";
 import { readPending, readSession, writeSession } from "@/lib/session";
+import { isUserExpired } from "@/lib/subscription";
 import { storeSchema } from "@/lib/validation";
 import type { ActionResult } from "@/lib/auth";
 import type { Store } from "@/lib/db/schema";
@@ -19,7 +20,8 @@ async function resolveLoginUser() {
       .from(users)
       .where(eq(users.id, pending.userId))
       .limit(1);
-    return found[0]?.active ? found[0] : null;
+    const u = found[0];
+    return u && u.active && !isUserExpired(u) ? u : null;
   }
   return getCurrentUser();
 }
@@ -42,11 +44,14 @@ export async function saveStoreAction(
 ): Promise<ActionResult & { store?: Store }> {
   const pending = await getCurrentUser();
   if (!pending) return { ok: false, error: "Sesi berakhir. Masuk ulang." };
-  if (pending.role !== "admin") {
+  if (!isManager(pending.role)) {
     return { ok: false, error: "Hanya manajemen yang boleh mengelola toko." };
   }
+  if (pending.username === "demo") {
+    return { ok: false, error: "Akun demo tidak dapat menambah atau mengubah pengaturan cabang." };
+  }
   const current = await readSession();
-  if (!current) return { ok: false, error: "Pilih toko dulu." };
+  if (!current) return { ok: false, error: "Sesi berakhir. Masuk ulang." };
 
   const parsed = storeSchema.safeParse(input);
   if (!parsed.success) {
@@ -63,7 +68,11 @@ export async function saveStoreAction(
         .where(eq(stores.id, data.id))
         .limit(1);
       if (!found[0]) return { ok: false, error: "Toko tidak ditemukan." };
-      if (data.id === current.storeId && !data.active) {
+      if (pending.role !== "admin") {
+        const owns = await userCanUseStore(pending, data.id);
+        if (!owns) return { ok: false, error: "Toko tidak tersedia untuk akun ini." };
+      }
+      if (current.storeId && data.id === current.storeId && !data.active) {
         return { ok: false, error: "Tidak bisa menonaktifkan toko yang sedang dipakai." };
       }
       const [updated] = await db
@@ -79,6 +88,8 @@ export async function saveStoreAction(
         })
         .where(eq(stores.id, data.id))
         .returning();
+      revalidatePath("/admin");
+      revalidatePath("/admin/stores");
       revalidatePath("/stores");
       revalidatePath("/select-store");
       revalidatePath("/");
@@ -99,7 +110,14 @@ export async function saveStoreAction(
       })
       .returning();
 
-    if (data.copyMenu) {
+    if (pending.role === "owner") {
+      await db
+        .insert(userStores)
+        .values({ userId: pending.id, storeId: created.id })
+        .onConflictDoNothing();
+    }
+
+    if (data.copyMenu && current.storeId) {
       const sourceCategories = await db
         .select()
         .from(categories)
@@ -141,6 +159,8 @@ export async function saveStoreAction(
       }
     }
 
+    revalidatePath("/admin");
+    revalidatePath("/admin/stores");
     revalidatePath("/stores");
     revalidatePath("/select-store");
     return { ok: true, store: created };

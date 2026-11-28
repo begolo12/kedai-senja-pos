@@ -31,9 +31,11 @@ export type StoreValues = {
 export function StoreDialog({
   store,
   current,
+  allowCopyMenu = true,
 }: {
   store?: StoreValues;
   current?: boolean;
+  allowCopyMenu?: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -49,7 +51,7 @@ export function StoreDialog({
     },
   );
   const [tax, setTax] = useState(String((store?.taxRate ?? 1100) / 100));
-  const [copyMenu, setCopyMenu] = useState(true);
+  const [copyMenu, setCopyMenu] = useState(allowCopyMenu);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const editing = Boolean(store?.id);
@@ -175,7 +177,7 @@ export function StoreDialog({
                 id="st-width"
                 value={values.receiptWidth}
                 onChange={(event) => set("receiptWidth", event.target.value as "58" | "80")}
-                className="h-8 w-full border border-input bg-transparent px-2 text-sm outline-none focus:ring-2 focus:ring-ring/40"
+                className="h-8 w-full border border-input bg-card px-2 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring/40"
               >
                 <option value="58">58 mm</option>
                 <option value="80">80 mm</option>
@@ -183,7 +185,7 @@ export function StoreDialog({
             </Field>
           </div>
 
-          {!editing ? (
+          {!editing && allowCopyMenu ? (
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"

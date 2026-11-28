@@ -29,8 +29,8 @@ export function PinDialog({ staff }: { staff: StaffValues }) {
   function submit(event: React.FormEvent) {
     event.preventDefault();
     setError(null);
-    if (pin.length < 4 || pin.length > 8) {
-      setError("PIN harus 4–8 digit.");
+    if (pin.length < 4 || pin.length > 64) {
+      setError("PIN / sandi harus 4–64 karakter.");
       return;
     }
     if (pin !== repeat) {
@@ -85,41 +85,41 @@ export function PinDialog({ staff }: { staff: StaffValues }) {
       </DialogTrigger>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
-          <DialogTitle className="font-serif text-2xl">Ganti PIN</DialogTitle>
+          <DialogTitle className="font-serif text-2xl">Ganti PIN / Sandi</DialogTitle>
           <DialogDescription>
-            {staff.name} · ID <span className="font-mono">@{staff.username}</span>. Tidak
-            ada password; login memakai ID + PIN.
+            {staff.name} · ID <span className="font-mono">@{staff.username}</span>. Login
+            memakai ID + PIN atau sandi.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="space-y-3">
           <div className="space-y-1">
             <Label htmlFor={`pin-${staff.id}`} className="text-[10px] tracking-[0.12em] text-muted-foreground uppercase">
-              PIN baru
+              PIN / Sandi baru
             </Label>
             <Input
               id={`pin-${staff.id}`}
               type="password"
-              inputMode="numeric"
+              maxLength={64}
               autoComplete="new-password"
               value={pin}
-              onChange={(event) => setPin(event.target.value.replace(/\D/g, "").slice(0, 8))}
+              onChange={(event) => setPin(event.target.value.replace(/\s/g, "").slice(0, 64))}
               className="font-mono"
-              placeholder="4–8 digit"
+              placeholder="Min. 4 karakter"
               required
               autoFocus
             />
           </div>
           <div className="space-y-1">
             <Label htmlFor={`pin2-${staff.id}`} className="text-[10px] tracking-[0.12em] text-muted-foreground uppercase">
-              Ulangi PIN
+              Ulangi PIN / Sandi
             </Label>
             <Input
               id={`pin2-${staff.id}`}
               type="password"
-              inputMode="numeric"
+              maxLength={64}
               autoComplete="new-password"
               value={repeat}
-              onChange={(event) => setRepeat(event.target.value.replace(/\D/g, "").slice(0, 8))}
+              onChange={(event) => setRepeat(event.target.value.replace(/\s/g, "").slice(0, 64))}
               className="font-mono"
               placeholder="ulangi"
               required

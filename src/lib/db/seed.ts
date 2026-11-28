@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import type { DB } from "./index";
 import {
   categories,
@@ -106,18 +106,23 @@ export async function seedIfEmpty(db: DB) {
   const existing = await db.select({ id: users.id }).from(users).limit(1);
   if (existing.length > 0) return;
 
-  const adminPin =
-    process.env.SEED_ADMIN_PIN ??
-    (process.env.NODE_ENV === "production" ? "" : "123456");
-  const cashierPin =
-    process.env.SEED_CASHIER_PIN ??
-    (process.env.NODE_ENV === "production" ? "" : "123456");
-  const kitchenPin =
-    process.env.SEED_KITCHEN_PIN ??
-    (process.env.NODE_ENV === "production" ? "" : "2222");
-  if (!/^\d{4,8}$/.test(adminPin) || !/^\d{4,8}$/.test(cashierPin) || !/^\d{4,8}$/.test(kitchenPin)) {
+  const adminPin = process.env.SEED_ADMIN_PIN ?? "admin123";
+  if (process.env.NODE_ENV === "production" && !process.env.SEED_ADMIN_PIN) {
+    console.warn(
+      "[SECURITY] SEED_ADMIN_PIN tidak diatur di production; menggunakan sandi default. Segera ubah lewat Back Office.",
+    );
+  }
+  const demoPin = process.env.SEED_DEMO_PIN ?? "demo123";
+  const cashierPin = process.env.SEED_CASHIER_PIN ?? "123456";
+  const kitchenPin = process.env.SEED_KITCHEN_PIN ?? "2222";
+  if (
+    !/^\S{4,64}$/.test(adminPin) ||
+    !/^\S{4,64}$/.test(demoPin) ||
+    !/^\S{4,64}$/.test(cashierPin) ||
+    !/^\S{4,64}$/.test(kitchenPin)
+  ) {
     throw new Error(
-      "SEED_ADMIN_PIN, SEED_CASHIER_PIN, dan SEED_KITCHEN_PIN wajib (4–8 digit) sebelum seed production.",
+      "SEED_ADMIN_PIN, SEED_DEMO_PIN, SEED_CASHIER_PIN, dan SEED_KITCHEN_PIN harus 4–64 karakter tanpa spasi.",
     );
   }
 
@@ -146,10 +151,16 @@ export async function seedIfEmpty(db: DB) {
       .insert(users)
       .values([
         {
-          name: "Rani Kusuma",
-          username: "manajemen",
+          name: "Admin Utama",
+          username: "admin",
           pinHash: hashPin(adminPin),
           role: "admin",
+        },
+        {
+          name: "Akun Demo",
+          username: "demo",
+          pinHash: hashPin(demoPin),
+          role: "owner",
         },
         {
           name: "Bima Saputra",
@@ -164,14 +175,16 @@ export async function seedIfEmpty(db: DB) {
           role: "kitchen",
         },
       ])
-      .returning({ id: users.id, role: users.role });
+      .returning({ id: users.id, role: users.role, username: users.username });
 
-    const admin = staff.find((user) => user.role === "admin")!;
-    const cashier = staff.find((user) => user.role === "cashier")!;
-    const kitchen = staff.find((user) => user.role === "kitchen")!;
+    const admin = staff.find((user) => user.username === "admin")!;
+    const demo = staff.find((user) => user.username === "demo")!;
+    const cashier = staff.find((user) => user.username === "kasir")!;
+    const kitchen = staff.find((user) => user.username === "barista")!;
 
-    // Kasir dan Barista/Dapur hanya ditugaskan ke Kemang; manajemen bisa membuka semua cabang.
+    // Demo mendapat akses ke kedua toko demo; kasir & barista ke Kemang; admin utama bisa membuka semua toko.
     await tx.insert(userStores).values([
+      ...storeRows.map((store) => ({ userId: demo.id, storeId: store.id })),
       { userId: cashier.id, storeId: storeRows[0].id },
       { userId: kitchen.id, storeId: storeRows[0].id },
     ]);
@@ -362,7 +375,7 @@ export async function seedIfEmpty(db: DB) {
       supplierIds.push(row.id);
     }
 
-    const poProducts = productRows.slice(0, 3);
+    const poProducts = firstStoreProducts.slice(0, 3);
     const [po] = await tx
       .insert(purchaseOrders)
       .values({
@@ -423,6 +436,83 @@ export async function seedIfEmpty(db: DB) {
       await tx.insert(recipeItems).values([
         { productId: chocoPastry, ingredientId: butterCroissant, qty: 1 },
       ]);
+    }
+  });
+}
+
+/** Memastikan akun `admin` dan `demo` tersedia meskipun database sudah terisi sebelumnya. */
+export async function ensureCoreAccounts(db: DB) {
+  const adminPin = process.env.SEED_ADMIN_PIN ?? "admin123";
+  if (process.env.NODE_ENV === "production" && !process.env.SEED_ADMIN_PIN) {
+    console.warn(
+      "[SECURITY] SEED_ADMIN_PIN tidak diatur di production; menggunakan sandi default. Segera ubah lewat Back Office.",
+    );
+  }
+  const demoPin = process.env.SEED_DEMO_PIN ?? "demo123";
+
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(918273646)`);
+
+    const existingAdmin = await tx
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.username, "admin"))
+      .limit(1);
+    if (existingAdmin.length === 0) {
+      await tx.insert(users).values({
+        name: "Admin Utama",
+        username: "admin",
+        pinHash: hashPin(adminPin),
+        role: "admin",
+        active: true,
+      });
+    }
+
+    const existingDemo = await tx
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.username, "demo"))
+      .limit(1);
+
+    let demoId = existingDemo[0]?.id;
+    if (!demoId) {
+      const [created] = await tx
+        .insert(users)
+        .values({
+          name: "Akun Demo",
+          username: "demo",
+          pinHash: hashPin(demoPin),
+          role: "owner",
+          active: true,
+        })
+        .returning({ id: users.id });
+      demoId = created.id;
+    }
+
+    const existingDemoStores = await tx
+      .select({ storeId: userStores.storeId })
+      .from(userStores)
+      .where(eq(userStores.userId, demoId))
+      .limit(1);
+
+    if (existingDemoStores.length === 0) {
+      let targetStores = await tx
+        .select({ id: stores.id })
+        .from(stores)
+        .where(inArray(stores.code, ["kemang", "senopati"]));
+      if (targetStores.length === 0) {
+        targetStores = await tx
+          .select({ id: stores.id })
+          .from(stores)
+          .where(eq(stores.active, true))
+          .limit(1);
+      }
+      if (targetStores.length > 0) {
+        await tx
+          .insert(userStores)
+          .values(targetStores.map((store) => ({ userId: demoId, storeId: store.id })))
+          .onConflictDoNothing();
+      }
     }
   });
 }

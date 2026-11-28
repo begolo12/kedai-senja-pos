@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { stores } from "@/lib/db/schema";
-import { createOpenOrderInTx } from "@/lib/open-order";
+import { createOpenOrderInTx, OpenOrderAbortError } from "@/lib/open-order";
 
 export const runtime = "nodejs";
 
@@ -89,7 +89,10 @@ export async function POST(request: Request) {
       number: result.number,
       total: result.total,
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof OpenOrderAbortError) {
+      return Response.json({ error: error.message }, { status: 400 });
+    }
     return Response.json({ error: "Gagal menyimpan pesanan." }, { status: 500 });
   }
 }

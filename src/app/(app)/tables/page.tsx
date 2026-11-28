@@ -4,7 +4,7 @@ import { and, asc, eq, inArray } from "drizzle-orm";
 import { Clock, UtensilsCrossed } from "lucide-react";
 import { db } from "@/lib/db";
 import { customers, orderItems, orders, products, storeTables } from "@/lib/db/schema";
-import { requireCashierOrAdmin } from "@/lib/auth";
+import { isManager, requireCashierOrAdmin } from "@/lib/auth";
 import { getSettings } from "@/lib/settings";
 import { formatMoney, formatTime } from "@/lib/money";
 import { PageHeader, SectionLabel } from "@/components/shared/page-header";
@@ -87,7 +87,7 @@ export default async function TablesPage() {
         eyebrow={`Ruangan · ${store.name}`}
         title="Meja"
         description="Tagihan meja (bayar nanti), pindah/gabung pesanan, dan QR self-order per meja."
-        actions={user.role === "admin" ? <TableDialog /> : undefined}
+        actions={isManager(user.role) ? <TableDialog /> : undefined}
       />
 
       <section className="grid gap-px border border-border bg-border sm:grid-cols-3">
@@ -234,11 +234,13 @@ export default async function TablesPage() {
                         "kosong"
                       )}
                     </p>
-                    <div className="mt-1.5">
-                      <TableDialog
-                        table={{ id: table.id, name: table.name, seats: table.seats, active: table.active }}
-                      />
-                    </div>
+                    {isManager(user.role) ? (
+                      <div className="mt-1.5">
+                        <TableDialog
+                          table={{ id: table.id, name: table.name, seats: table.seats, active: table.active }}
+                        />
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               );

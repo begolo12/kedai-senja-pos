@@ -1,11 +1,13 @@
 import { z } from "zod";
 
+const pinCredentialSchema = z
+  .string()
+  .trim()
+  .regex(/^\S{4,64}$/, "PIN / sandi 4–64 karakter tanpa spasi.");
+
 export const loginSchema = z.object({
   username: z.string().trim().min(1, "Username wajib diisi.").max(40),
-  pin: z
-    .string()
-    .trim()
-    .regex(/^\d{4,8}$/, "PIN 4–8 digit angka."),
+  pin: pinCredentialSchema,
 });
 
 export const productSchema = z.object({
@@ -216,15 +218,25 @@ export const staffSchema = z.object({
     .min(3, "Username minimal 3 karakter.")
     .max(32)
     .regex(/^[a-z0-9._-]+$/, "Username: huruf kecil, angka, titik, garis."),
-  role: z.enum(["admin", "cashier", "kitchen"]),
-  pin: z
-    .string()
-    .trim()
-    .regex(/^\d{4,8}$/, "PIN 4–8 digit angka.")
-    .optional()
-    .or(z.literal("")),
+  role: z.enum(["admin", "owner", "cashier", "kitchen"]),
+  pin: pinCredentialSchema.optional().or(z.literal("")),
   active: z.boolean(),
   storeIds: z.array(z.number().int().positive()).max(50).default([]),
+  createStore: z.boolean().optional().default(false),
+  storeName: z.string().trim().max(80).optional().or(z.literal("")),
+  subscriptionNote: z.string().trim().max(200).optional().or(z.literal("")),
+  durationMode: z.enum(["keep", "unlimited", "custom"]).optional().default("keep"),
+  durationAmount: z.number().int().min(1).max(120).optional(),
+  durationUnit: z.enum(["months", "years"]).optional().default("months"),
+});
+
+export const renewSubscriptionSchema = z.object({
+  userId: z.number().int().positive(),
+  mode: z.enum(["extend", "unlimited", "expire_now"]),
+  amount: z.number().int().min(1).max(120).optional(),
+  unit: z.enum(["months", "years"]).optional().default("months"),
+  subscriptionNote: z.string().trim().max(200).optional(),
+  reactivate: z.boolean().optional().default(true),
 });
 export const storeSchema = z.object({
   id: z.number().int().positive().optional(),

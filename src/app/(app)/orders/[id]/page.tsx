@@ -4,7 +4,7 @@ import { ArrowLeft, Printer, UserRound } from "lucide-react";
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { customers, orderItems, orders, shifts, users } from "@/lib/db/schema";
-import { requireCashierOrAdmin } from "@/lib/auth";
+import { isManager, requireCashierOrAdmin } from "@/lib/auth";
 import { getSettings } from "@/lib/settings";
 import { formatDateTime, formatMoney } from "@/lib/money";
 import { Button } from "@/components/ui/button";
@@ -62,7 +62,7 @@ export default async function OrderDetailPage({ params }: PageProps<"/orders/[id
             <Button nativeButton={false} variant="outline" render={<Link href={`/receipt/${order.id}`} />}>
               <Printer /> Struk
             </Button>
-            {user.role === "admin" &&
+            {isManager(user.role) &&
             order.status !== "refunded" &&
             order.status !== "cancelled" &&
             order.status !== "open" ? (

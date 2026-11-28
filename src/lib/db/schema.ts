@@ -42,10 +42,12 @@ export const users = pgTable("users", {
   name: text("name").notNull(),
   username: text("username").notNull().unique(),
   pinHash: text("pin_hash").notNull(),
-  role: text("role", { enum: ["admin", "cashier", "kitchen"] })
+  role: text("role", { enum: ["admin", "owner", "cashier", "kitchen"] })
     .notNull()
     .default("cashier"),
   active: boolean("active").notNull().default(true),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  subscriptionNote: text("subscription_note").notNull().default(""),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

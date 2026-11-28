@@ -15,6 +15,8 @@ export type OpenOrderResult =
   | { ok: true; orderId: number; number: string; total: number }
   | { ok: false; error: string };
 
+export class OpenOrderAbortError extends Error {}
+
 const tabItemSchema = {
   productId: (value: unknown) =>
     typeof value === "number" && Number.isInteger(value) && value > 0,
@@ -168,7 +170,7 @@ export async function createOpenOrderInTx(
     lines: lines.map((line) => ({ product: line.product, qty: line.qty })),
     createdAt,
   });
-  if (!deducted.ok) return { ok: false as const, error: deducted.error };
+  if (!deducted.ok) throw new OpenOrderAbortError(deducted.error);
 
   return { ok: true, orderId: order.id, number: order.number, total };
 }

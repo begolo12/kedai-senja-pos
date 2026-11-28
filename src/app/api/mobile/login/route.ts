@@ -5,6 +5,7 @@ import { users } from "@/lib/db/schema";
 import { getAllowedStores } from "@/lib/auth";
 import { verifyPin } from "@/lib/pin";
 import { createPendingToken } from "@/lib/session";
+import { isUserExpired } from "@/lib/subscription";
 import {
   corsHeaders,
   json,
@@ -17,7 +18,7 @@ import {
 
 const schema = z.object({
   username: z.string().trim().min(1).max(40),
-  pin: z.string().trim().regex(/^\d{4,8}$/),
+  pin: z.string().trim().regex(/^\S{4,64}$/),
 });
 
 export async function OPTIONS(request: Request) {
@@ -42,9 +43,15 @@ export async function POST(request: Request) {
       .where(eq(users.username, username))
       .limit(1);
     const user = found[0];
-    if (!user || !user.active || !verifyPin(parsed.data.pin, user.pinHash)) {
+    if (!user || !verifyPin(parsed.data.pin, user.pinHash)) {
       mobileLoginFailed(username);
       return json(request, { error: "ID atau PIN salah." }, 401);
+    }
+    if (!user.active) {
+      return json(request, { error: "Akun sedang dinonaktifkan. Hubungi admin." }, 403);
+    }
+    if (isUserExpired(user)) {
+      return json(request, { error: "Masa aktif akun sudah berakhir. Hubungi admin untuk perpanjangan." }, 403);
     }
 
     mobileLoginOk(username);

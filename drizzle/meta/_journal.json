@@ -50,6 +50,13 @@
       "when": 1795638540674,
       "tag": "0006_flashy_kingpin",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1795854254240,
+      "tag": "0007_cold_sebastian_shaw",
+      "breakpoints": true
     }
   ]
 }

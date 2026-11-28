@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { and, desc, eq, like, or, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { products, stockMovements, users } from "@/lib/db/schema";
-import { requireAdmin } from "@/lib/auth";
+import { isManager, requireAdmin } from "@/lib/auth";
 import { getSettings } from "@/lib/settings";
 import { formatDateTime, formatMoney, formatNumber } from "@/lib/money";
 import { Input } from "@/components/ui/input";
@@ -98,7 +98,7 @@ export default async function InventoryPage({ searchParams }: PageProps<"/invent
               <th className="px-4 py-2.5 text-right font-medium">Batas</th>
               <th className="px-4 py-2.5 text-right font-medium">Nilai</th>
               <th className="px-4 py-2.5 text-right font-medium">Status</th>
-              {user.role === "admin" ? <th className="px-4 py-2.5" /> : null}
+              {isManager(user.role) ? <th className="px-4 py-2.5" /> : null}
             </tr>
           </thead>
           <tbody>
@@ -128,7 +128,7 @@ export default async function InventoryPage({ searchParams }: PageProps<"/invent
                       <span className="stamp border-border text-muted-foreground">Aman</span>
                     )}
                   </td>
-                  {user.role === "admin" ? (
+                  {isManager(user.role) ? (
                     <td className="px-4 py-2.5 text-right">
                       <StockAdjustDialog
                         productId={product.id}

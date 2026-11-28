@@ -74,10 +74,10 @@ export default async function DashboardPage() {
       method: orders.paymentMethod,
       status: orders.status,
       createdAt: orders.createdAt,
-      cashier: users.name,
+      cashier: sql<string>`coalesce(${users.name}, 'Self-order')`,
     })
     .from(orders)
-    .innerJoin(users, eq(orders.userId, users.id))
+    .leftJoin(users, eq(orders.userId, users.id))
     .where(eq(orders.storeId, store.id))
     .orderBy(desc(orders.createdAt))
     .limit(6);
@@ -252,33 +252,39 @@ export default async function DashboardPage() {
               Semua
             </Link>
           </div>
-          <ul className="divide-y divide-border">
-            {recent.map((order) => (
-              <li key={order.id}>
-                <Link
-                  href={`/orders/${order.id}`}
-                  className="flex items-center justify-between gap-3 px-5 py-3 transition-colors hover:bg-muted/50"
-                >
-                  <div className="min-w-0">
-                    <p className="font-mono text-xs">{order.number}</p>
-                    <p className="truncate text-[11px] text-muted-foreground">
-                      {formatTime(order.createdAt)} · {order.cashier} · {(order.method ?? "tagihan").toUpperCase()}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    {order.status === "refunded" ? (
-                      <span className="stamp border-destructive/40 text-destructive">Refund</span>
-                    ) : order.status === "partially_refunded" ? (
-                      <span className="stamp border-signal/50 text-signal">Parsial</span>
-                    ) : null}
-                    <span className="font-mono text-sm tabular">
-                      {formatMoney(order.total, settings.currency)}
-                    </span>
-                  </div>
-                </Link>
-              </li>
-            ))}
-          </ul>
+          {recent.length === 0 ? (
+            <p className="px-5 py-8 text-sm text-muted-foreground">
+              Belum ada pesanan di toko ini.
+            </p>
+          ) : (
+            <ul className="divide-y divide-border">
+              {recent.map((order) => (
+                <li key={order.id}>
+                  <Link
+                    href={`/orders/${order.id}`}
+                    className="flex items-center justify-between gap-3 px-5 py-3 transition-colors hover:bg-muted/50"
+                  >
+                    <div className="min-w-0">
+                      <p className="font-mono text-xs">{order.number}</p>
+                      <p className="truncate text-[11px] text-muted-foreground">
+                        {formatTime(order.createdAt)} · {order.cashier} · {(order.method ?? "tagihan").toUpperCase()}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {order.status === "refunded" ? (
+                        <span className="stamp border-destructive/40 text-destructive">Refund</span>
+                      ) : order.status === "partially_refunded" ? (
+                        <span className="stamp border-signal/50 text-signal">Parsial</span>
+                      ) : null}
+                      <span className="font-mono text-sm tabular">
+                        {formatMoney(order.total, settings.currency)}
+                      </span>
+                    </div>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
 
         <section className="border border-border bg-card">

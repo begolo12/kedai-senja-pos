@@ -4,12 +4,12 @@ import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { expenses, shifts } from "@/lib/db/schema";
-import { assertStore, type ActionResult } from "@/lib/auth";
+import { assertCashierOrAdmin, type ActionResult } from "@/lib/auth";
 import { getOpenShift, getShiftSummary } from "@/lib/shifts";
 import { expenseSchema, shiftCloseSchema, shiftOpenSchema } from "@/lib/validation";
 
 export async function openShiftAction(input: unknown): Promise<ActionResult> {
-  const auth = await assertStore();
+  const auth = await assertCashierOrAdmin();
   if (!auth.ok) return auth;
 
   const parsed = shiftOpenSchema.safeParse(input);
@@ -32,7 +32,7 @@ export async function openShiftAction(input: unknown): Promise<ActionResult> {
 
 /** Catat kas keluar operasional dari laci shift yang sedang berjalan. */
 export async function createExpenseAction(input: unknown): Promise<ActionResult> {
-  const auth = await assertStore();
+  const auth = await assertCashierOrAdmin();
   if (!auth.ok) return auth;
 
   const parsed = expenseSchema.safeParse(input);
@@ -58,7 +58,7 @@ export async function createExpenseAction(input: unknown): Promise<ActionResult>
 }
 
 export async function closeShiftAction(input: unknown): Promise<ActionResult> {
-  const auth = await assertStore();
+  const auth = await assertCashierOrAdmin();
   if (!auth.ok) return auth;
 
   const parsed = shiftCloseSchema.safeParse(input);

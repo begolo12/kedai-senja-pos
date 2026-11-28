@@ -69,16 +69,16 @@ export default async function LoginPage() {
           </p>
           <h2 className="mt-2 font-serif text-4xl tracking-tight">Selamat datang</h2>
           <p className="mt-2 mb-8 text-sm text-muted-foreground">
-            Masuk dengan ID dan PIN staf. Tidak ada password.
+            Masuk dengan ID dan PIN atau sandi akun kamu.
           </p>
 
           <LoginForm />
 
-          <div className="mt-10 border-t border-dashed pt-5">
+          <div className="mt-8 border-t border-dashed pt-5">
             <p className="flex items-start gap-2 text-xs leading-relaxed text-muted-foreground">
               <ArrowUpRight className="mt-0.5 size-3.5 shrink-0" />
-              Lupa PIN? Minta admin mereset dari halaman Staf. Setiap transaksi
-              tercatat atas nama akun yang masuk.
+              Butuh ID sendiri untuk usaha kamu atau lupa PIN? Minta admin membuatkan
+              atau mereset akun baru.
             </p>
           </div>
         </div>

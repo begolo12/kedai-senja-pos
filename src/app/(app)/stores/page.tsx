@@ -3,8 +3,8 @@ import Link from "next/link";
 import { and, asc, eq, gte, sql } from "drizzle-orm";
 import { ArrowRight, MapPin } from "lucide-react";
 import { db } from "@/lib/db";
-import { orders, products, stores } from "@/lib/db/schema";
-import { requireAdmin } from "@/lib/auth";
+import { orders, products, stores, userStores } from "@/lib/db/schema";
+import { isSuperAdmin, requireAdmin } from "@/lib/auth";
 import { dayStart } from "@/lib/dates";
 import { formatMoney } from "@/lib/money";
 import { chooseStoreAction } from "@/lib/actions/stores";
@@ -15,8 +15,16 @@ import { StoreDialog } from "@/components/stores/store-dialog";
 export const metadata: Metadata = { title: "Toko" };
 
 export default async function StoresPage() {
-  const { store: activeStore } = await requireAdmin();
-  const rows = await db.select().from(stores).orderBy(asc(stores.name));
+  const { user, store: activeStore } = await requireAdmin();
+  const rows = isSuperAdmin(user.role)
+    ? await db.select().from(stores).orderBy(asc(stores.name))
+    : await db
+        .select({ store: stores })
+        .from(userStores)
+        .innerJoin(stores, eq(userStores.storeId, stores.id))
+        .where(eq(userStores.userId, user.id))
+        .orderBy(asc(stores.name))
+        .then((list) => list.map((item) => item.store));
 
   const productStats = await db
     .select({
@@ -46,13 +54,19 @@ export default async function StoresPage() {
   const orderMap = new Map(orderStats.map((row) => [row.storeId, row]));
   const activeCount = rows.filter((store) => store.active).length;
 
+  const isDemo = user.username === "demo";
+
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <PageHeader
         eyebrow="Manajemen · semua toko"
         title="Toko"
-        description="Satu akun manajemen bisa membuka semua toko. Setiap toko punya menu, stok, pesanan, kasir, QRIS, dan laporan sendiri."
-        actions={<StoreDialog />}
+        description={
+          isDemo
+            ? "Cabang demo bersifat tetap agar dapat dicoba bersama. Transaksi kasir, produk, stok, dan laporan tetap tersimpan dan berlanjut."
+            : "Satu akun pemilik bisa mengelola cabang miliknya. Setiap toko punya menu, stok, pesanan, kasir, QRIS, dan laporan sendiri."
+        }
+        actions={!isDemo ? <StoreDialog /> : undefined}
       />
 
       <section className="grid gap-px border border-border bg-border sm:grid-cols-3">
@@ -125,19 +139,21 @@ export default async function StoresPage() {
                     {current ? "Toko aktif" : "Buka toko"} <ArrowRight />
                   </Button>
                 </form>
-                <StoreDialog
-                  current={current}
-                  store={{
-                    id: store.id,
-                    name: store.name,
-                    code: store.code,
-                    address: store.address,
-                    phone: store.phone,
-                    taxRate: store.taxRate,
-                    receiptWidth: store.receiptWidth,
-                    active: store.active,
-                  }}
-                />
+                {!isDemo ? (
+                  <StoreDialog
+                    current={current}
+                    store={{
+                      id: store.id,
+                      name: store.name,
+                      code: store.code,
+                      address: store.address,
+                      phone: store.phone,
+                      taxRate: store.taxRate,
+                      receiptWidth: store.receiptWidth,
+                      active: store.active,
+                    }}
+                  />
+                ) : null}
               </div>
             </section>
           );
@@ -146,7 +162,16 @@ export default async function StoresPage() {
 
       <p className="text-[11px] text-muted-foreground">
         Atur QRIS, footer struk, dan poin per toko lewat <strong>Pengaturan</strong> setelah
-        membuka toko tersebut. Tambah kasir dan pilih tokonya di <Link href="/staff" className="underline underline-offset-4">Staf</Link>.
+        membuka toko tersebut.
+        {isSuperAdmin(user.role) ? (
+          <>
+            {" "}Tambah akun dan atur masa aktif di{" "}
+            <Link href="/admin/accounts" className="underline underline-offset-4">
+              Back Office
+            </Link>
+            .
+          </>
+        ) : null}
       </p>
     </div>
   );

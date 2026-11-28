@@ -30,7 +30,7 @@ export function UserMenu({
 }: {
   name: string;
   username: string;
-  role: "admin" | "cashier" | "kitchen";
+  role: "admin" | "owner" | "cashier" | "kitchen";
 }) {
   const [pending, startTransition] = useTransition();
   const initials = name
@@ -56,7 +56,13 @@ export function UserMenu({
         <span className="hidden pr-1 text-left leading-tight sm:block">
           <span className="block text-[13px]">{name}</span>
           <span className="block text-[10px] tracking-[0.14em] text-muted-foreground uppercase">
-            {role === "admin" ? "Manajemen" : role === "kitchen" ? "Barista / Dapur" : "Kasir"}
+            {role === "admin"
+              ? "Admin Utama"
+              : role === "owner"
+                ? "Pemilik"
+                : role === "kitchen"
+                  ? "Barista / Dapur"
+                  : "Kasir"}
           </span>
         </span>
       </DropdownMenuTrigger>
@@ -80,7 +86,7 @@ export function UserMenu({
   );
 }
 
-export function MobileNav({ role }: { role: "admin" | "cashier" | "kitchen" }) {
+export function MobileNav({ role }: { role: "admin" | "owner" | "cashier" | "kitchen" }) {
   return (
     <Sheet>
       <SheetTrigger

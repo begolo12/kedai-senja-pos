@@ -56,13 +56,13 @@ export function LoginScreen({ onLogin }: { onLogin: (result: LoginResult) => voi
             />
           </label>
           <label>
-            PIN
+            PIN / Sandi
             <input
               value={pin}
-              onChange={(event) => setPin(event.target.value.replace(/\D/g, "").slice(0, 8))}
+              onChange={(event) => setPin(event.target.value.replace(/\s/g, "").slice(0, 64))}
               placeholder="••••••"
               type="password"
-              inputMode="numeric"
+              maxLength={64}
               autoComplete="current-password"
               required
             />

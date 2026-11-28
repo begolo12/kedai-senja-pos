@@ -19,12 +19,11 @@ import {
   TicketPercent,
   Truck,
   UsersRound,
-  UserRoundCog,
   UtensilsCrossed,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type Role = "admin" | "cashier" | "kitchen";
+type Role = "admin" | "owner" | "cashier" | "kitchen";
 
 type NavItem = {
   href: string;
@@ -44,46 +43,45 @@ const GROUPS: NavGroup[] = [
     id: "operasional",
     label: "Operasional",
     items: [
-      { href: "/", label: "Ringkasan", icon: LayoutDashboard, roles: ["admin"] },
-      { href: "/pos", label: "Kasir", icon: ShoppingBasket, roles: ["admin", "cashier"] },
-      { href: "/tables", label: "Meja", icon: UtensilsCrossed, roles: ["admin", "cashier"] },
-      { href: "/kds", label: "Dapur", icon: ChefHat, roles: ["admin", "cashier", "kitchen"] },
-      { href: "/orders", label: "Pesanan", icon: ReceiptText, roles: ["admin", "cashier"] },
+      { href: "/", label: "Ringkasan", icon: LayoutDashboard, roles: ["admin", "owner"] },
+      { href: "/pos", label: "Kasir", icon: ShoppingBasket, roles: ["admin", "owner", "cashier"] },
+      { href: "/tables", label: "Meja", icon: UtensilsCrossed, roles: ["admin", "owner", "cashier"] },
+      { href: "/kds", label: "Dapur", icon: ChefHat, roles: ["admin", "owner", "cashier", "kitchen"] },
+      { href: "/orders", label: "Pesanan", icon: ReceiptText, roles: ["admin", "owner", "cashier"] },
     ],
   },
   {
     id: "katalog",
     label: "Katalog & stok",
     items: [
-      { href: "/products", label: "Produk", icon: Package, roles: ["admin"] },
-      { href: "/inventory", label: "Stok", icon: Boxes, roles: ["admin"] },
-      { href: "/purchases", label: "Pembelian", icon: Truck, roles: ["admin"] },
+      { href: "/products", label: "Produk", icon: Package, roles: ["admin", "owner"] },
+      { href: "/inventory", label: "Stok", icon: Boxes, roles: ["admin", "owner"] },
+      { href: "/purchases", label: "Pembelian", icon: Truck, roles: ["admin", "owner"] },
     ],
   },
   {
     id: "pelanggan",
     label: "Pelanggan & promo",
     items: [
-      { href: "/customers", label: "Pelanggan", icon: UsersRound, roles: ["admin"] },
-      { href: "/tiers", label: "Membership", icon: Crown, roles: ["admin"] },
-      { href: "/vouchers", label: "Promo", icon: TicketPercent, roles: ["admin"] },
+      { href: "/customers", label: "Pelanggan", icon: UsersRound, roles: ["admin", "owner"] },
+      { href: "/tiers", label: "Membership", icon: Crown, roles: ["admin", "owner"] },
+      { href: "/vouchers", label: "Promo", icon: TicketPercent, roles: ["admin", "owner"] },
     ],
   },
   {
     id: "wawasan",
     label: "Wawasan",
     items: [
-      { href: "/reports", label: "Laporan", icon: ChartNoAxesColumn, roles: ["admin"] },
-      { href: "/shift", label: "Shift", icon: Clock, roles: ["admin", "cashier"] },
+      { href: "/reports", label: "Laporan", icon: ChartNoAxesColumn, roles: ["admin", "owner"] },
+      { href: "/shift", label: "Shift", icon: Clock, roles: ["admin", "owner", "cashier"] },
     ],
   },
   {
     id: "toko",
     label: "Toko",
     items: [
-      { href: "/stores", label: "Cabang", icon: Store, roles: ["admin"] },
-      { href: "/staff", label: "Staf", icon: UserRoundCog, roles: ["admin"] },
-      { href: "/settings", label: "Pengaturan", icon: Settings, roles: ["admin"] },
+      { href: "/stores", label: "Cabang", icon: Store, roles: ["admin", "owner"] },
+      { href: "/settings", label: "Pengaturan", icon: Settings, roles: ["admin", "owner"] },
     ],
   },
 ];

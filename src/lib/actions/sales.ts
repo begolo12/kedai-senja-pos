@@ -24,6 +24,8 @@ export type CheckoutResult =
   | { ok: true; orderId: number; number: string; changeDue: number; total: number }
   | { ok: false; error: string };
 
+class CheckoutAbortError extends Error {}
+
 /**
  * Normalises the two wire shapes into payment rows: split list or legacy single.
  * Rows store the *applied* amount: the cash row is net of change, so summing
@@ -50,7 +52,8 @@ export async function checkoutAction(input: unknown): Promise<CheckoutResult> {
   }
   const data = parsed.data;
 
-  return db.transaction(async (tx) => {
+  try {
+    return await db.transaction(async (tx) => {
     const existing = await tx
       .select({
         id: orders.id,
@@ -342,7 +345,7 @@ export async function checkoutAction(input: unknown): Promise<CheckoutResult> {
       lines: lines.map((line) => ({ product: line.product, qty: line.qty })),
       createdAt,
     });
-    if (!deducted.ok) return { ok: false as const, error: deducted.error };
+    if (!deducted.ok) throw new CheckoutAbortError(deducted.error);
 
     if (voucherRow) {
       await tx
@@ -369,6 +372,12 @@ export async function checkoutAction(input: unknown): Promise<CheckoutResult> {
       total: totals.total,
     };
   });
+  } catch (error) {
+    if (error instanceof CheckoutAbortError) {
+      return { ok: false, error: error.message };
+    }
+    throw error;
+  }
 }
 
 export type RefundResult = { ok: true } | { ok: false; error: string };

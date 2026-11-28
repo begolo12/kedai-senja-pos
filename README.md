@@ -44,26 +44,19 @@ pnpm dev
 `pnpm dev` menjalankan PGlite (Postgres lokal, port 5433), migrasi, seed,
 lalu Next.js. Buka http://localhost:3000.
 
-Seed lokal berisi menu warkop (ricebowl, sushi, minuman bubuk, camilan,
-tambahan) dengan varian seperti level pedas/less sugar.
-
-Login memakai **ID + PIN**, lalu **pilih toko**. Tidak ada password.
-Manajemen membuka semua toko; kasir hanya toko yang dicentang di menu
-**Staf**. Manajemen dapat menambah toko (dengan opsi salin menu), mengganti
-ID/PIN, dan menonaktifkan akun.
-
 Akun development (database lokal kosong):
 
-| ID Login | PIN | Akses |
+| ID Login | PIN / Sandi | Akses |
 | --- | --- | --- |
-| `manajemen` | `123456` | semua toko, semua menu, kelola akun |
-| `kasir` | `123456` | Kemang saja: POS + shift |
+| `admin` | `admin123` | Back Office `/admin`: buat ID pelanggan, atur masa aktif & perpanjangan |
+| `demo` | `demo123` | Akun demo bersama (role `owner`): akses penuh POS di Kemang & Senopati |
+| `kasir` | `123456` | Kemang saja: Kasir, Meja, Dapur, Pesanan, Shift |
+| `barista` | `2222` | Kemang saja: Layar Dapur (KDS) |
 
-Seed berisi dua toko: **Warkop Berkah — Kemang** dan **Tebet**. Kasir demo
-hanya ditugaskan ke Kemang.
-
-PIN production **tidak** ada di repo: diisi lewat `SEED_ADMIN_PIN` /
-`SEED_CASHIER_PIN` saat seed dan disimpan sebagai secret Vercel.
+Seed berisi dua toko: **Kopi Tera — Kemang** dan **Kopi Tera — Senopati**.
+Sandi production **tidak** ada di repo: diisi lewat `SEED_ADMIN_PIN` /
+`SEED_DEMO_PIN` / `SEED_CASHIER_PIN` / `SEED_KITCHEN_PIN` dan disimpan sebagai
+secret Vercel.
 
 ## Perintah
 
@@ -85,18 +78,16 @@ Production memakai Vercel + Neon. Environment yang wajib:
 ```
 DATABASE_URL=postgresql://...neon.tech/...?sslmode=require
 AUTH_SECRET=<acak ≥32 karakter>
-SEED_ADMIN_PIN=<4–8 digit>
-SEED_CASHIER_PIN=<4–8 digit>
+CRON_SECRET=<acak untuk cron /api/maintenance/login-attempts>
+SEED_ADMIN_PIN=<4–64 karakter tanpa spasi>
+SEED_DEMO_PIN=demo123
+SEED_CASHIER_PIN=<4–64 karakter tanpa spasi>
+SEED_KITCHEN_PIN=<4–64 karakter tanpa spasi>
 ```
 
-Seed hanya dijalankan eksplisit, tidak otomatis di runtime:
-
-```bash
-DATABASE_URL="..." SEED_ADMIN_PIN="..." SEED_CASHIER_PIN="..." NODE_ENV=production pnpm db:setup
-```
-
-Neon/Vercel menyediakan `DATABASE_URL` lewat integrasi. Jangan commit nilai
-apa pun; `.env.local` sudah di-ignore.
+`pnpm build` otomatis menjalankan `scripts/migrate-prod.ts` (migrasi Drizzle,
+seed bila database kosong, dan memastikan akun `admin` & `demo` tersedia).
+Jangan commit nilai secret apa pun; `.env` dan `.env.local` sudah di-ignore.
 
 ## Alur toko
 
@@ -129,16 +120,16 @@ apa pun; `.env.local` sudah di-ignore.
 
 ## Role
 
-| Menu | Manajemen | Kasir |
-| --- | --- | --- |
-| Kasir, Shift, Dapur (KDS) | ✓ | ✓ |
-| Pesanan, Produk, Stok, Pelanggan, Laporan, Staf, Pengaturan | ✓ | — |
-| Meja (tagihan, pindah/gabung), Membership, Pembelian, Promo, Toko | ✓ | — |
-| Refund, ubah harga/pajak/staf | ✓ | — |
-| Struk | semua | hanya transaksi sendiri |
+| Menu | Admin Utama (`/admin`) | Pemilik (`owner`) | Kasir | Barista / Dapur |
+| --- | --- | --- | --- | --- |
+| Back Office: Buat ID, Masa Aktif, Perpanjangan | ✓ | — | — | — |
+| Ringkasan, Produk, Stok, Pembelian, Pelanggan, Membership, Promo, Laporan, Pengaturan, Cabang | — | ✓ (toko sendiri) | — | — |
+| Kasir, Meja, Pesanan, Shift | — | ✓ | ✓ | — |
+| Dapur (KDS) | — | ✓ | ✓ | ✓ |
+| Refund | — | ✓ | — | — |
 
-Kasir hanya melihat POS dan shift. Request langsung ke halaman manajemen
-dialihkan ke POS; receipt milik kasir lain → 404.
+`admin` masuk langsung ke Back Office (`/admin`). Pemilik (`owner`) mendapat
+seluruh fitur POS untuk tokonya selama masa aktif langganan berlaku.
 
 ## Android
 

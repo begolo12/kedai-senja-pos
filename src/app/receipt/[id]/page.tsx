@@ -4,7 +4,7 @@ import { ArrowLeft, Check, MessageCircle, RotateCcw } from "lucide-react";
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { customers, orderItems, orderPayments, orders, users } from "@/lib/db/schema";
-import { requireStore } from "@/lib/auth";
+import { isManager, requireStore } from "@/lib/auth";
 import { getSettings } from "@/lib/settings";
 import { formatDateTime, formatMoney } from "@/lib/money";
 import { Button } from "@/components/ui/button";
@@ -32,7 +32,7 @@ export default async function ReceiptPage({ params, searchParams }: PageProps<"/
     .where(and(eq(orders.id, orderId), eq(orders.storeId, store.id)))
     )[0];
   if (!order) notFound();
-  if (user.role !== "admin" && order.order.userId !== null && order.order.userId !== user.id) notFound();
+  if (!isManager(user.role) && order.order.userId !== null && order.order.userId !== user.id) notFound();
 
   const items = await db.select().from(orderItems).where(eq(orderItems.orderId, orderId));
   const payments = await db
@@ -118,7 +118,7 @@ export default async function ReceiptPage({ params, searchParams }: PageProps<"/
               <MessageCircle /> WhatsApp
             </Button>
           ) : null}
-          {user.role === "admin" ? (
+          {isManager(user.role) ? (
             <Button nativeButton={false} size="sm" render={<Link href={`/orders/${orderId}`} />}>
               Detail
             </Button>
